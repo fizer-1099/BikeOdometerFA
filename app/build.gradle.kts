@@ -5,6 +5,15 @@ plugins {
 android {
     namespace = "ir.balasari.bikeodometer"
     compileSdk = 35
+
+compileOptions {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+kotlinOptions {
+    jvmTarget = "17"
+}
     defaultConfig {
         applicationId = "ir.balasari.bikeodometer"
         minSdk = 26
