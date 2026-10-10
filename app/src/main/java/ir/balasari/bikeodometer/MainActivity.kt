@@ -1,4 +1,4 @@
-package ir.balasari.bikeodometer
+Xpackage ir.balasari.bikeodometer
 
 import android.Manifest
 import android.app.Activity
@@ -16,6 +16,12 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.Marker
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.Priority
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,6 +32,9 @@ class MainActivity : Activity() {
     private lateinit var speedText: TextView
     private lateinit var statusText: TextView
     private val routeLine = Polyline()
+    private var locationMarker: Marker? = null
+    private val fused by lazy { LocationServices.getFusedLocationProviderClient(this) }
+    private var liveCallback: LocationCallback? = null
     private val points = mutableListOf<GeoPoint>()
     private val prefs by lazy { getSharedPreferences("ride_state", MODE_PRIVATE) }
     private val requestCode = 410
@@ -45,6 +54,11 @@ class MainActivity : Activity() {
         routeLine.outlinePaint.color = android.graphics.Color.rgb(25, 118, 210)
         routeLine.outlinePaint.strokeWidth = 8f
         map.overlays.add(routeLine)
+locationMarker = Marker(map).apply {
+title = "مکان فعلی"
+setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+}
+map.overlays.add(locationMarker)
 
         findViewById<Button>(R.id.startButton).setOnClickListener { checkAndStart() }
         findViewById<Button>(R.id.stopButton).setOnClickListener { stopRide() }
@@ -52,6 +66,33 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.exportButton).setOnClickListener { exportCsv() }
         refreshStats()
         refreshRoute()
+        startLiveLocation()
+    }
+
+    private fun startLiveLocation() {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) return
+
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
+            .setMinUpdateDistanceMeters(3f)
+            .build()
+
+        liveCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val location = result.lastLocation ?: return
+                val point = GeoPoint(location.latitude, location.longitude)
+                locationMarker?.position = point
+                map.controller.animateTo(point)
+                map.invalidate()
+            }
+        }
+
+        try {
+            fused.requestLocationUpdates(request, liveCallback!!, mainLooper)
+        } catch (_: SecurityException) {
+            Toast.makeText(this, "دسترسی مکان فعال نیست.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun checkAndStart() {
@@ -69,7 +110,10 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == this.requestCode && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) checkAndStart()
+        if (requestCode == this.requestCode && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            checkAndStart()
+            startLiveLocation()
+        }
         else if (requestCode == this.requestCode) Toast.makeText(this, "برای ثبت مسیر، مجوز مکان لازم است.", Toast.LENGTH_LONG).show()
     }
 
@@ -95,7 +139,11 @@ class MainActivity : Activity() {
             if (pair.size == 2) try { GeoPoint(pair[0].toDouble(), pair[1].toDouble()) } catch (_: Exception) { null } else null
         }
         routeLine.setPoints(parsed)
-        if (parsed.isNotEmpty()) map.controller.animateTo(parsed.last())
+        if (parsed.isNotEmpty()) {
+val latest = parsed.last()
+locationMarker?.position = latest
+map.controller.animateTo(latest)
+}
         map.invalidate()
     }
 
@@ -127,7 +175,11 @@ class MainActivity : Activity() {
         } else Toast.makeText(this, "ساخت فایل گزارش ناموفق بود.", Toast.LENGTH_LONG).show()
     }
 
-    override fun onResume() { super.onResume(); map.onResume(); refreshStats(); refreshRoute() }
+    override fun onResume() { super.onResume(); map.onResume(); refreshStats(); refreshRoute(); startLiveLocation() }
     override fun onPause() { map.onPause(); super.onPause() }
-    override fun onDestroy() { map.onDetach(); super.onDestroy() }
+    override fun onDestroy() {
+        try { liveCallback?.let { fused.removeLocationUpdates(it) } } catch (_: Exception) {}
+        map.onDetach()
+        super.onDestroy()
+    }
 }
