@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
+        android:icon="@drawable/ic_bike_launcher"
+        android:roundIcon="@drawable/ic_bike_launcher"
         android:allowBackup="true"
         android:label="کیلومترشمار دوچرخه"
         android:usesCleartextTraffic="true"
