@@ -42,6 +42,20 @@ class MainActivity : Activity() {
         getSharedPreferences("ride_state", MODE_PRIVATE)
     }
     private val requestCode = 410
+    private lateinit var startButton: Button
+    private val uiPrefs by lazy {
+        getSharedPreferences("ride_ui", MODE_PRIVATE)
+    }
+
+    private fun setRideUi(active: Boolean) {
+        uiPrefs.edit().putBoolean("active", active).apply()
+        if (::startButton.isInitialized) {
+            startButton.text = if (active) "در حال ثبت مسیر" else "شروع ثبت مسیر"
+            startButton.isEnabled = !active
+            startButton.alpha = if (active) 0.7f else 1.0f
+        }
+        statusText.text = if (active) "ثبت مسیر فعال است" else "آماده شروع"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,9 +83,9 @@ class MainActivity : Activity() {
         }
         locationMarker?.let { map.overlays.add(it) }
 
-        findViewById<Button>(R.id.startButton).setOnClickListener {
-            checkAndStart()
-        }
+        startButton = findViewById(R.id.startButton)
+        startButton.setOnClickListener { checkAndStart() }
+        setRideUi(uiPrefs.getBoolean("active", false))
         findViewById<Button>(R.id.stopButton).setOnClickListener {
             stopRide()
         }
@@ -151,6 +165,7 @@ class MainActivity : Activity() {
             Intent(this, TrackingService::class.java)
                 .setAction(TrackingService.ACTION_START)
         )
+        setRideUi(true)
         statusText.text = "اندازه‌گیری فعال است؛ صفحه را می‌توانی خاموش کنی."
         Toast.makeText(this, "ثبت مسیر شروع شد", Toast.LENGTH_SHORT).show()
     }
@@ -191,6 +206,7 @@ class MainActivity : Activity() {
             historyPrefs.edit().putString("items", updated).apply()
         }
 
+        setRideUi(false)
         statusText.text = "سفر پایان یافت"
         Toast.makeText(this, "سفر پایان یافت", Toast.LENGTH_SHORT).show()
         refreshStats()
