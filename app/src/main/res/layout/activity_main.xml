@@ -1,0 +1,33 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="12dp" android:background="#F5F7FA">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="کیلومترشمار دوچرخه" android:textSize="24sp" android:textStyle="bold"
+        android:gravity="center" android:textColor="#17324D" android:padding="8dp"/>
+    <org.osmdroid.views.MapView android:id="@+id/map" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1"/>
+    <TextView android:id="@+id/distanceText" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="مسافت: ۰٫۰۰ کیلومتر"
+        android:textSize="23sp" android:textStyle="bold" android:gravity="center"
+        android:textColor="#146C43" android:padding="6dp"/>
+    <TextView android:id="@+id/speedText" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="سرعت فعلی: ۰٫۰ | میانگین: ۰٫۰ کیلومتر/ساعت"
+        android:textSize="15sp" android:gravity="center" android:padding="4dp"/>
+    <TextView android:id="@+id/statusText" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="آماده شروع سفر"
+        android:textSize="14sp" android:gravity="center" android:padding="4dp"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center" android:paddingTop="6dp">
+        <Button android:id="@+id/startButton" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="شروع"/>
+        <Button android:id="@+id/stopButton" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="پایان سفر"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center">
+        <Button android:id="@+id/historyButton" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="تاریخچه"/>
+        <Button android:id="@+id/exportButton" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="خروجی گزارش"/>
+    </LinearLayout>
+</LinearLayout>
