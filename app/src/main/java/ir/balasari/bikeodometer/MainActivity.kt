@@ -163,7 +163,7 @@ class MainActivity : Activity() {
         // نقشه
         map.setTileSource(TileSourceFactory.MAPNIK)
         map.setMultiTouchControls(true)
-        map.controller.setZoom(16.0)
+        map.controller.setZoom(18.0)
         map.controller.setCenter(GeoPoint(35.6892, 51.3890))
         routeLine.outlinePaint.color = Color.rgb(25, 118, 210)
         routeLine.outlinePaint.strokeWidth = 8f
