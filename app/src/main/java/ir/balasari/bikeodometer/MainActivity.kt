@@ -14,7 +14,11 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
@@ -26,6 +30,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -46,6 +51,7 @@ class MainActivity : Activity() {
         }
     }
 
+    // صفحه‌ی اصلی
     private lateinit var gauge: GaugeView
     private lateinit var map: MapView
     private lateinit var gaugePage: View
@@ -61,12 +67,27 @@ class MainActivity : Activity() {
     private lateinit var distanceValueText: TextView
     private lateinit var limitText: TextView
     private lateinit var limitSwitch: Button
+    private lateinit var viewBanner: View
+    private lateinit var viewBannerText: TextView
+
+    // صفحه‌ها و نوار پایین
+    private lateinit var homePage: View
+    private lateinit var tripsPage: View
+    private lateinit var recordsPage: View
+    private lateinit var navHome: TextView
+    private lateinit var navTrips: TextView
+    private lateinit var navRecords: TextView
+    private lateinit var tripsList: ListView
+    private lateinit var tripsEmpty: TextView
+    private lateinit var recordsContainer: LinearLayout
 
     private val routeLine = Polyline()
     private var marker: Marker? = null
     private var liveCallback: LocationCallback? = null
     private val fused by lazy { LocationServices.getFusedLocationProviderClient(this) }
 
+    private var currentTab = 0
+    private var viewingRide: Ride? = null
     private var followMe = true
     private var centered = false
     private var lastShownPoints = -1
@@ -93,6 +114,18 @@ class MainActivity : Activity() {
         distanceValueText = findViewById(R.id.distanceValueText)
         limitText = findViewById(R.id.limitText)
         limitSwitch = findViewById(R.id.limitSwitch)
+        viewBanner = findViewById(R.id.viewBanner)
+        viewBannerText = findViewById(R.id.viewBannerText)
+
+        homePage = findViewById(R.id.homePage)
+        tripsPage = findViewById(R.id.tripsPage)
+        recordsPage = findViewById(R.id.recordsPage)
+        navHome = findViewById(R.id.navHome)
+        navTrips = findViewById(R.id.navTrips)
+        navRecords = findViewById(R.id.navRecords)
+        tripsList = findViewById(R.id.tripsList)
+        tripsEmpty = findViewById(R.id.tripsEmpty)
+        recordsContainer = findViewById(R.id.recordsContainer)
 
         // نقشه
         map.setTileSource(TileSourceFactory.MAPNIK)
@@ -112,11 +145,13 @@ class MainActivity : Activity() {
             false
         }
         findViewById<Button>(R.id.followButton).setOnClickListener {
+            if (viewingRide != null) closeView()
             followMe = true
             marker?.position?.let { map.controller.animateTo(it) }
         }
+        findViewById<Button>(R.id.viewBannerClose).setOnClickListener { closeView() }
 
-        // تب‌ها
+        // تب‌های بالای صفحه‌ی اصلی
         tabGauge.setOnClickListener { showPage(false) }
         tabMap.setOnClickListener { showPage(true) }
 
@@ -130,15 +165,38 @@ class MainActivity : Activity() {
         }
         updateLimitUi()
 
-        // دکمه‌ها
         rideButton.setOnClickListener {
             if (RideStore.state(this).getBoolean("active", false)) confirmStop() else onStartClicked()
         }
-        findViewById<Button>(R.id.historyButton).setOnClickListener { showHistory() }
         findViewById<Button>(R.id.exportButton).setOnClickListener { exportCsv() }
+
+        // نوار پایین
+        navHome.text = "🏠\nاصلی"
+        navTrips.text = "🧭\nسفرها"
+        navRecords.text = "🏆\nرکوردها"
+        navHome.setOnClickListener { showTab(0) }
+        navTrips.setOnClickListener { showTab(1) }
+        navRecords.setOnClickListener { showTab(2) }
+        showTab(0)
     }
 
-    // ------------------------------------------------------------------ UI
+    // ------------------------------------------------------------------ ناوبری
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun showTab(i: Int) {
+        currentTab = i
+        homePage.visibility = if (i == 0) View.VISIBLE else View.GONE
+        tripsPage.visibility = if (i == 1) View.VISIBLE else View.GONE
+        recordsPage.visibility = if (i == 2) View.VISIBLE else View.GONE
+        val on = Color.rgb(2, 136, 209)
+        val off = Color.rgb(120, 130, 145)
+        navHome.setTextColor(if (i == 0) on else off)
+        navTrips.setTextColor(if (i == 1) on else off)
+        navRecords.setTextColor(if (i == 2) on else off)
+        if (i == 1) refreshTrips()
+        if (i == 2) refreshRecords()
+    }
 
     private fun showPage(showMap: Boolean) {
         gaugePage.visibility = if (showMap) View.GONE else View.VISIBLE
@@ -152,6 +210,17 @@ class MainActivity : Activity() {
             refreshRoute()
         }
     }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        when {
+            viewingRide != null -> closeView()
+            currentTab != 0 -> showTab(0)
+            else -> super.onBackPressed()
+        }
+    }
+
+    // ------------------------------------------------------------------ صفحه‌ی اصلی
 
     private fun updateLimitUi() {
         val s = RideStore.settings(this)
@@ -182,6 +251,11 @@ class MainActivity : Activity() {
         if (uiActive != active) {
             uiActive = active
             applyRideUi(active)
+            // سفر که تمام شد، لیست سفرها و رکوردها هم تازه شود
+            if (!active) {
+                if (currentTab == 1) refreshTrips()
+                if (currentTab == 2) refreshRecords()
+            }
         }
         clockText.text = SimpleDateFormat("HH:mm:ss", fa).format(Date())
 
@@ -194,11 +268,12 @@ class MainActivity : Activity() {
         avgValueText.text = String.format(fa, "%.1f", p.getFloat("average", 0f))
         distanceValueText.text = String.format(fa, "%.2f", p.getFloat("distance", 0f))
 
-        if (mapPage.visibility == View.VISIBLE) refreshRoute()
+        if (homePage.visibility == View.VISIBLE && mapPage.visibility == View.VISIBLE) refreshRoute()
         checkStaleRide(p)
     }
 
     private fun refreshRoute() {
+        if (viewingRide != null) return
         val count = RideStore.state(this).getInt("points", 0)
         if (count == lastShownPoints) return
         lastShownPoints = count
@@ -251,6 +326,7 @@ class MainActivity : Activity() {
         }
         recoveryDialogShown = false
         lastShownPoints = -1
+        if (viewingRide != null) closeView()
         ContextCompat.startForegroundService(
             this,
             Intent(this, TrackingService::class.java).setAction(TrackingService.ACTION_START)
@@ -303,37 +379,98 @@ class MainActivity : Activity() {
             .show()
     }
 
-    // ------------------------------------------------------------------ تاریخچه و خروجی
+    // ------------------------------------------------------------------ سفرها
 
-    private fun showHistory() {
-        val raw = RideStore.historyRaw(this)
-        val text = if (raw.isBlank()) {
-            "هنوز سفری ذخیره نشده است."
-        } else {
-            raw.lines().filter { it.isNotBlank() }.reversed().joinToString("\n\n") { line ->
-                val p = line.split(",")
-                if (p.size >= 3) {
-                    val km = p[1].toDoubleOrNull()?.let { String.format(fa, "%.2f", it) } ?: p[1]
-                    val dur = RideStore.formatDuration(p[2].toLongOrNull() ?: 0L)
-                    "${p[0]}\n$km کیلومتر  •  $dur"
-                } else line
+    private fun refreshTrips() {
+        val rides = RideStore.loadRides(this).reversed()
+        tripsEmpty.visibility = if (rides.isEmpty()) View.VISIBLE else View.GONE
+        tripsList.adapter = object : ArrayAdapter<Ride>(
+            this, android.R.layout.simple_list_item_2, android.R.id.text1, rides
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getView(position, convertView, parent)
+                val r = rides[position]
+                val km = String.format(fa, "%.2f", r.km)
+                val dur = RideStore.formatDuration(r.elapsed)
+                v.findViewById<TextView>(android.R.id.text1).text = "$km کیلومتر  •  $dur"
+                var sub = r.stamp
+                if (r.avgKmh > 0) sub += "  •  میانگین " + String.format(fa, "%.1f", r.avgKmh)
+                if (r.maxKmh > 0) sub += " | حداکثر " + String.format(fa, "%.1f", r.maxKmh)
+                v.findViewById<TextView>(android.R.id.text2).text = sub
+                return v
             }
         }
+        tripsList.setOnItemClickListener { _, _, pos, _ -> showRideMenu(rides[pos]) }
+    }
+
+    private fun showRideMenu(r: Ride) {
         AlertDialog.Builder(this)
-            .setTitle("تاریخچه سفرها")
-            .setMessage(text)
-            .setPositiveButton("باشه", null)
+            .setTitle(r.stamp)
+            .setItems(arrayOf("نمایش مسیر روی نقشه", "حذف سفر")) { _, which ->
+                if (which == 0) viewRide(r) else confirmDelete(r)
+            }
             .show()
     }
 
+    private fun confirmDelete(r: Ride) {
+        AlertDialog.Builder(this)
+            .setTitle("حذف سفر")
+            .setMessage("سفر ${r.stamp} حذف شود؟")
+            .setPositiveButton("حذف") { _, _ ->
+                RideStore.deleteRide(this, r.index)
+                refreshTrips()
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun viewRide(r: Ride) {
+        val pts = RideStore.readRideRoute(this, r.startMs).map { GeoPoint(it.first, it.second) }
+        if (pts.isEmpty()) {
+            Toast.makeText(this, "مسیر این سفر ذخیره نشده است.", Toast.LENGTH_LONG).show()
+            return
+        }
+        viewingRide = r
+        followMe = false
+        routeLine.setPoints(pts)
+        viewBannerText.text = "سفر " + r.stamp
+        viewBanner.visibility = View.VISIBLE
+        showTab(0)
+        showPage(true)
+        map.post {
+            try {
+                if (pts.size >= 2) map.zoomToBoundingBox(BoundingBox.fromGeoPoints(pts), false, 100)
+                else map.controller.setCenter(pts[0])
+            } catch (_: Exception) {
+            }
+            map.invalidate()
+        }
+    }
+
+    private fun closeView() {
+        viewingRide = null
+        viewBanner.visibility = View.GONE
+        followMe = true
+        lastShownPoints = -1
+        refreshRoute()
+    }
+
     private fun exportCsv() {
-        val items = RideStore.historyRaw(this)
-        if (items.isBlank()) {
+        val rides = RideStore.loadRides(this)
+        if (rides.isEmpty()) {
             Toast.makeText(this, "هنوز گزارشی برای خروجی وجود ندارد.", Toast.LENGTH_SHORT).show()
             return
         }
-        val csv = "تاریخ,مسافت_کیلومتر,مدت_ثانیه\n$items"
-        val uri = FileShare.createUri(this, "rides.csv", csv)
+        val sb = StringBuilder("تاریخ,مسافت_کیلومتر,مدت_ثانیه,زمان_حرکت_ثانیه,حداکثر_سرعت,میانگین_سرعت\n")
+        for (r in rides) {
+            sb.append(r.stamp).append(',')
+                .append(String.format(Locale.US, "%.3f", r.km)).append(',')
+                .append(r.elapsed).append(',')
+                .append(r.moving).append(',')
+                .append(String.format(Locale.US, "%.1f", r.maxKmh)).append(',')
+                .append(String.format(Locale.US, "%.1f", r.avgKmh)).append('\n')
+        }
+        val uri = FileShare.createUri(this, "rides.csv", sb.toString())
         if (uri != null) {
             val send = Intent(Intent.ACTION_SEND)
                 .setType("text/csv")
@@ -343,6 +480,71 @@ class MainActivity : Activity() {
         } else {
             Toast.makeText(this, "ساخت فایل گزارش ناموفق بود.", Toast.LENGTH_LONG).show()
         }
+    }
+
+    // ------------------------------------------------------------------ رکوردها
+
+    private fun addRecord(title: String, value: String, sub: String?) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.bg_card)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, dp(10)) }
+        }
+        card.addView(TextView(this).apply {
+            text = title
+            textSize = 13f
+            setTextColor(Color.rgb(120, 130, 145))
+        })
+        card.addView(TextView(this).apply {
+            text = value
+            textSize = 22f
+            setTextColor(Color.rgb(2, 136, 209))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        if (sub != null) {
+            card.addView(TextView(this).apply {
+                text = sub
+                textSize = 12f
+                setTextColor(Color.rgb(120, 130, 145))
+            })
+        }
+        recordsContainer.addView(card)
+    }
+
+    private fun refreshRecords() {
+        recordsContainer.removeAllViews()
+        val rides = RideStore.loadRides(this)
+        if (rides.isEmpty()) {
+            addRecord("هنوز رکوردی ثبت نشده", "—", "اولین سفرت رو شروع کن")
+            return
+        }
+        val fastest = rides.maxByOrNull { it.maxKmh }
+        if (fastest != null && fastest.maxKmh > 0) {
+            addRecord("🚀 بیشترین سرعت", String.format(fa, "%.1f km/h", fastest.maxKmh), fastest.stamp)
+        }
+        val longest = rides.maxByOrNull { it.km }
+        if (longest != null) {
+            addRecord("📏 طولانی‌ترین سفر", String.format(fa, "%.2f km", longest.km), longest.stamp)
+        }
+        val longestTime = rides.maxByOrNull { it.elapsed }
+        if (longestTime != null) {
+            addRecord("⏱ بیشترین زمان سواری", RideStore.formatDuration(longestTime.elapsed), longestTime.stamp)
+        }
+        val bestAvg = rides.maxByOrNull { it.avgKmh }
+        if (bestAvg != null && bestAvg.avgKmh > 0) {
+            addRecord("⚡ بهترین میانگین سرعت", String.format(fa, "%.1f km/h", bestAvg.avgKmh), bestAvg.stamp)
+        }
+        val totalKm = rides.sumOf { it.km }
+        val totalSec = rides.sumOf { it.elapsed }
+        addRecord(
+            "📊 مجموع مسافت",
+            String.format(fa, "%.1f km", totalKm),
+            String.format(fa, "%d", rides.size) + " سفر"
+        )
+        addRecord("🕒 مجموع زمان سواری", RideStore.formatDuration(totalSec), null)
     }
 
     // ------------------------------------------------------------------ مکان زنده (فقط وقتی برنامه جلوی چشم است)
@@ -357,10 +559,10 @@ class MainActivity : Activity() {
                 val l = result.lastLocation ?: return
                 val pt = GeoPoint(l.latitude, l.longitude)
                 marker?.position = pt
-                if (!centered) {
+                if (!centered && viewingRide == null) {
                     map.controller.setCenter(pt)
                     centered = true
-                } else if (followMe && mapPage.visibility == View.VISIBLE) {
+                } else if (followMe && viewingRide == null && mapPage.visibility == View.VISIBLE) {
                     map.controller.animateTo(pt)
                 }
                 map.invalidate()
