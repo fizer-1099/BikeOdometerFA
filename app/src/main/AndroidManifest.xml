@@ -32,6 +32,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name=".HudActivity"
+            android:exported="false"/>
+        <activity
+            android:name=".HolderActivity"
+            android:exported="false"/>
         <service
             android:name=".TrackingService"
             android:exported="false"

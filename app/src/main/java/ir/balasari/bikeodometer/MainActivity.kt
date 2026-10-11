@@ -177,6 +177,14 @@ class MainActivity : Activity() {
         navHome.setOnClickListener { showTab(0) }
         navTrips.setOnClickListener { showTab(1) }
         navRecords.setOnClickListener { showTab(2) }
+        val navHud = findViewById<TextView>(R.id.navHud)
+        navHud.text = "🔆\nHUD"
+        navHud.setTextColor(Color.rgb(120, 130, 145))
+        navHud.setOnClickListener { startActivity(Intent(this, HudActivity::class.java)) }
+        val navHolder = findViewById<TextView>(R.id.navHolder)
+        navHolder.text = "📱\nهولدر"
+        navHolder.setTextColor(Color.rgb(120, 130, 145))
+        navHolder.setOnClickListener { startActivity(Intent(this, HolderActivity::class.java)) }
         showTab(0)
     }
 
