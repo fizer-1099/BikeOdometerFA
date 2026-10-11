@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F1F4F9"
+    android:background="@color/bg"
     android:fitsSystemWindows="true"
     android:layoutDirection="rtl"
     android:orientation="vertical">
@@ -22,7 +22,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="#FFFFFF"
+                android:background="@color/card"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="16dp"
@@ -36,7 +36,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="● متوقف"
-                    android:textColor="#78828F"
+                    android:textColor="@color/text_secondary"
                     android:textSize="15sp" />
 
                 <TextView
@@ -44,7 +44,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="--:--:--"
-                    android:textColor="#0288D1"
+                    android:textColor="@color/accent"
                     android:textSize="16sp" />
             </LinearLayout>
 
@@ -72,7 +72,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/bg_tab"
                     android:text="ردیابی مسیر"
-                    android:textColor="#3C4655" />
+                    android:textColor="@color/tab_text" />
             </LinearLayout>
 
             <FrameLayout
@@ -107,8 +107,8 @@
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
                             android:layout_weight="1"
-                            android:text="سقف مجاز: 30 km/h"
-                            android:textColor="#1B2430"
+                            android:text="سقف مجاز"
+                            android:textColor="@color/text_primary"
                             android:textSize="15sp" />
 
                         <Button
@@ -119,6 +119,7 @@
                             android:minWidth="0dp"
                             android:minHeight="0dp"
                             android:text="−"
+                            android:textColor="@color/tab_text"
                             android:textSize="20sp" />
 
                         <Button
@@ -130,6 +131,7 @@
                             android:minWidth="0dp"
                             android:minHeight="0dp"
                             android:text="+"
+                            android:textColor="@color/tab_text"
                             android:textSize="20sp" />
 
                         <Button
@@ -142,7 +144,8 @@
                             android:minHeight="0dp"
                             android:paddingStart="12dp"
                             android:paddingEnd="12dp"
-                            android:text="🔕 خاموش" />
+                            android:text="🔕 خاموش"
+                            android:textColor="@color/tab_text" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -190,7 +193,7 @@
                             android:layout_marginStart="8dp"
                             android:layout_weight="1"
                             android:text="سفر"
-                            android:textColor="#1B2430"
+                            android:textColor="@color/text_primary"
                             android:textSize="14sp" />
 
                         <Button
@@ -229,125 +232,13 @@
             </LinearLayout>
 
             <LinearLayout
+                android:id="@+id/statsRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:paddingBottom="8dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="8dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="مسافت (km)"
-                        android:textColor="#78828F"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/distanceValueText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="۰٫۰۰"
-                        android:textColor="#0288D1"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="8dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="میانگین (km/h)"
-                        android:textColor="#78828F"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/avgValueText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="۰٫۰"
-                        android:textColor="#0288D1"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="8dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="حداکثر (km/h)"
-                        android:textColor="#78828F"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/maxValueText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="۰٫۰"
-                        android:textColor="#0288D1"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_margin="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="8dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="زمان سفر"
-                        android:textColor="#78828F"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tripTimeValue"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="۰۰:۰۰:۰۰"
-                        android:textColor="#0288D1"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-            </LinearLayout>
+                android:paddingBottom="8dp" />
         </LinearLayout>
 
         <!-- ============ سفرها ============ -->
@@ -361,7 +252,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="#FFFFFF"
+                android:background="@color/card"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:padding="12dp">
@@ -371,7 +262,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="سفرها"
-                    android:textColor="#1B2430"
+                    android:textColor="@color/text_primary"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -385,7 +276,7 @@
                     android:paddingStart="14dp"
                     android:paddingEnd="14dp"
                     android:text="خروجی CSV"
-                    android:textColor="#3C4655" />
+                    android:textColor="@color/tab_text" />
             </LinearLayout>
 
             <TextView
@@ -395,7 +286,7 @@
                 android:gravity="center"
                 android:padding="32dp"
                 android:text="هنوز سفری ذخیره نشده است."
-                android:textColor="#78828F"
+                android:textColor="@color/text_secondary"
                 android:textSize="15sp" />
 
             <ListView
@@ -419,58 +310,28 @@
                 android:orientation="vertical"
                 android:padding="12dp" />
         </ScrollView>
+
+        <!-- ============ تنظیمات ============ -->
+        <ScrollView
+            android:id="@+id/settingsPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/settingsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp" />
+        </ScrollView>
     </FrameLayout>
 
-    <!-- ============ نوار پایین ============ -->
+    <!-- ============ نوار پایین (در کد پر می‌شود) ============ -->
     <LinearLayout
+        android:id="@+id/navBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#FFFFFF"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/navHome"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:padding="8dp"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/navHud"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:padding="8dp"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/navHolder"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:padding="8dp"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/navTrips"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:padding="8dp"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/navRecords"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:padding="8dp"
-            android:textSize="11sp" />
-    </LinearLayout>
+        android:background="@color/card"
+        android:orientation="horizontal" />
 </LinearLayout>

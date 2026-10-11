@@ -161,8 +161,9 @@ class TrackingService : Service() {
             .apply()
 
         checkLimit(speedKmh, now)
+        FloatingOverlay.update(this, speedKmh)
 
-        val text = "مسافت: %.2f کیلومتر | سرعت: %.1f".format(distance, speedKmh)
+        val text = "مسافت: " + Units.distText(this, distance.toFloat()) + " " + Units.distUnit(this) + " | سرعت: " + Units.speedText(this, speedKmh.toFloat()) + " " + Units.speedUnit(this)
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
     }
@@ -199,6 +200,7 @@ class TrackingService : Service() {
             tracking = false
         }
         RideStore.finishRide(this, System.currentTimeMillis())
+        FloatingOverlay.hide(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
@@ -223,7 +225,7 @@ class TrackingService : Service() {
             flags
         )
         return NotificationCompat.Builder(this, CHANNEL)
-            .setContentTitle("کیلومترشمار دوچرخه")
+            .setContentTitle("اف کیلومتر")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setOngoing(true)
@@ -238,6 +240,7 @@ class TrackingService : Service() {
     override fun onDestroy() {
         try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
         try { tone?.release() } catch (_: Exception) {}
+        FloatingOverlay.hide(this)
         super.onDestroy()
     }
 }

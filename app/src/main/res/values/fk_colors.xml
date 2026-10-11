@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#F1F4F9</color>
+    <color name="card">#FFFFFF</color>
+    <color name="card_stroke">#E1E6EE</color>
+    <color name="text_primary">#1B2430</color>
+    <color name="text_secondary">#78828F</color>
+    <color name="tab_bg">#E3E8EF</color>
+    <color name="tab_text">#3C4655</color>
+    <color name="accent">#0288D1</color>
+    <color name="stop">#D32F2F</color>
+    <color name="ok">#2E7D32</color>
+    <color name="gauge_track">#DEE4EC</color>
+</resources>

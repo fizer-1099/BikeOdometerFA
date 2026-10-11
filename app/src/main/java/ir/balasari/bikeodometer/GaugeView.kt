@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.content.ContextCompat
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -23,6 +24,7 @@ class GaugeView @JvmOverloads constructor(
     var limit = 0f
         set(value) { field = value; invalidate() }
 
+    var unitLabel = "km/h"
     private var shown = 0f
     private var target = 0f
     private var animator: ValueAnimator? = null
@@ -34,7 +36,7 @@ class GaugeView @JvmOverloads constructor(
     private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        color = Color.rgb(222, 228, 236)
+        color = ContextCompat.getColor(context, R.color.gauge_track)
     }
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -46,11 +48,11 @@ class GaugeView @JvmOverloads constructor(
     }
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        color = Color.rgb(90, 100, 115)
+        color = ContextCompat.getColor(context, R.color.text_secondary)
     }
     private val number = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        color = Color.rgb(16, 24, 40)
+        color = ContextCompat.getColor(context, R.color.text_primary)
         isFakeBoldText = true
     }
     private val unit = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -129,7 +131,7 @@ class GaugeView @JvmOverloads constructor(
         number.textSize = size * 0.26f
         canvas.drawText(shown.toInt().toString(), cx, cy + size * 0.07f, number)
         unit.textSize = size * 0.06f
-        canvas.drawText("km/h", cx, cy + size * 0.17f, unit)
+        canvas.drawText(unitLabel, cx, cy + size * 0.17f, unit)
     }
 
     override fun onDetachedFromWindow() {

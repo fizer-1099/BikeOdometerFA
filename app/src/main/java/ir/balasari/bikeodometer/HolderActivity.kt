@@ -154,7 +154,7 @@ class HolderActivity : Activity() {
         timeV = TextView(this)
         val stats = LinearLayout(this)
         stats.orientation = LinearLayout.HORIZONTAL
-        stats.addView(tile("مسافت (km)", distV))
+        stats.addView(tile("مسافت (" + Units.distUnit(this) + ")", distV))
         stats.addView(tile("میانگین", avgV))
         stats.addView(tile("حداکثر", maxV))
         stats.addView(tile("زمان", timeV))
@@ -194,19 +194,19 @@ class HolderActivity : Activity() {
         clockText.text = SimpleDateFormat("HH:mm:ss", fa).format(Date())
 
         val speed = if (active) p.getFloat("speed", 0f) else 0f
-        speedText.text = speed.toInt().toString()
+        speedText.text = Units.speedValue(this, speed).toInt().toString()
 
         val s = RideStore.settings(this)
         val limitOn = s.getBoolean("limit_on", false)
         val limit = s.getInt("limit", 30)
         speedText.setTextColor(if (limitOn && speed > limit) alertRed else green)
-        unitText.text = if (limitOn) "km/h  •  سقف " + String.format(fa, "%d", limit) else "km/h"
+        unitText.text = if (limitOn) Units.speedUnit(this) + "  •  سقف " + Units.speedText(this, limit.toFloat(), 0) else Units.speedUnit(this)
 
         val now = System.currentTimeMillis()
         val elapsed = if (active) (now - p.getLong("start_ms", now)) / 1000L else p.getLong("elapsed", 0L)
-        distV.text = String.format(fa, "%.2f", p.getFloat("distance", 0f))
-        avgV.text = String.format(fa, "%.1f", p.getFloat("average", 0f))
-        maxV.text = String.format(fa, "%.1f", p.getFloat("max", 0f))
+        distV.text = Units.distText(this, p.getFloat("distance", 0f))
+        avgV.text = Units.speedText(this, p.getFloat("average", 0f))
+        maxV.text = Units.speedText(this, p.getFloat("max", 0f))
         timeV.text = RideStore.formatDuration(elapsed)
     }
 
@@ -263,10 +263,12 @@ class HolderActivity : Activity() {
     override fun onResume() {
         super.onResume()
         handler.post(ticker)
+        FloatingOverlay.onAppVisibility(this, true)
     }
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
+        FloatingOverlay.onAppVisibility(this, false)
         super.onPause()
     }
 }

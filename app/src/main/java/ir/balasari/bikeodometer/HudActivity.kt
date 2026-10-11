@@ -70,7 +70,7 @@ class HudActivity : Activity() {
         speedText.text = "0"
 
         val unit = TextView(this)
-        unit.text = "km/h"
+        unit.text = Units.speedUnit(this)
         unit.setTextSize(TypedValue.COMPLEX_UNIT_PX, base * 0.09f)
         unit.setTextColor(Color.rgb(150, 160, 170))
         unit.gravity = Gravity.CENTER
@@ -121,7 +121,7 @@ class HudActivity : Activity() {
         val active = p.getBoolean("active", false)
         val speed = if (active) p.getFloat("speed", 0f) else 0f
 
-        val text = speed.toInt().toString()
+        val text = Units.speedValue(this, speed).toInt().toString()
         speedText.text = text
         // سه رقمی‌ها کمی کوچک‌تر تا از صفحه بیرون نزنند
         val size = if (text.length >= 3) base * 0.5f else base * 0.62f
@@ -133,8 +133,8 @@ class HudActivity : Activity() {
 
         val now = System.currentTimeMillis()
         val elapsed = if (active) (now - p.getLong("start_ms", now)) / 1000L else 0L
-        infoText.text = String.format(fa, "%.2f", p.getFloat("distance", 0f)) +
-            " km  •  " + RideStore.formatDuration(elapsed)
+        infoText.text = Units.distText(this, p.getFloat("distance", 0f)) +
+            " " + Units.distUnit(this) + "  •  " + RideStore.formatDuration(elapsed)
 
         hintText.text = if (active) {
             "برای عادی/آینه‌ای کردن تصویر، صفحه را لمس کن"
@@ -157,10 +157,12 @@ class HudActivity : Activity() {
     override fun onResume() {
         super.onResume()
         handler.post(ticker)
+        FloatingOverlay.onAppVisibility(this, true)
     }
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
+        FloatingOverlay.onAppVisibility(this, false)
         super.onPause()
     }
 }
