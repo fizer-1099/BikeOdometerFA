@@ -1,33 +1,332 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:padding="12dp" android:background="#F5F7FA">
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="کیلومترشمار دوچرخه" android:textSize="24sp" android:textStyle="bold"
-        android:gravity="center" android:textColor="#17324D" android:padding="8dp"/>
-    <org.osmdroid.views.MapView android:id="@+id/map" android:layout_width="match_parent"
-        android:layout_height="0dp" android:layout_weight="1"/>
-    <TextView android:id="@+id/distanceText" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="مسافت: ۰٫۰۰ کیلومتر"
-        android:textSize="23sp" android:textStyle="bold" android:gravity="center"
-        android:textColor="#146C43" android:padding="6dp"/>
-    <TextView android:id="@+id/speedText" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="سرعت فعلی: ۰٫۰ | میانگین: ۰٫۰ کیلومتر/ساعت"
-        android:textSize="15sp" android:gravity="center" android:padding="4dp"/>
-    <TextView android:id="@+id/statusText" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="آماده شروع سفر"
-        android:textSize="14sp" android:gravity="center" android:padding="4dp"/>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center" android:paddingTop="6dp">
-        <Button android:id="@+id/startButton" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="شروع"/>
-        <Button android:id="@+id/stopButton" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="پایان سفر"/>
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F1F4F9"
+    android:fitsSystemWindows="true"
+    android:layoutDirection="rtl"
+    android:orientation="vertical">
+
+    <!-- وضعیت و ساعت -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFFFFF"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="● متوقف"
+            android:textColor="#78828F"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/clockText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--:--:--"
+            android:textColor="#0288D1"
+            android:textSize="16sp" />
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center">
-        <Button android:id="@+id/historyButton" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="تاریخچه"/>
-        <Button android:id="@+id/exportButton" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="خروجی گزارش"/>
+
+    <!-- تب‌ها -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <Button
+            android:id="@+id/tabGauge"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_primary"
+            android:text="کیلومترشمار"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/tabMap"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tab"
+            android:text="ردیابی مسیر"
+            android:textColor="#3C4655" />
+    </LinearLayout>
+
+    <!-- صفحه‌ها -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/gaugePage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <ir.balasari.bikeodometer.GaugeView
+                android:id="@+id/gauge"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="12dp"
+                android:background="@drawable/bg_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/limitText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="سقف مجاز: 30 km/h"
+                    android:textColor="#1B2430"
+                    android:textSize="15sp" />
+
+                <Button
+                    android:id="@+id/limitMinus"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_tab"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:text="−"
+                    android:textSize="20sp" />
+
+                <Button
+                    android:id="@+id/limitPlus"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_tab"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:text="+"
+                    android:textSize="20sp" />
+
+                <Button
+                    android:id="@+id/limitSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_tab"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="🔕 خاموش" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/mapPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <org.osmdroid.views.MapView
+                android:id="@+id/map"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <Button
+                android:id="@+id/followButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_gravity="top|start"
+                android:layout_margin="12dp"
+                android:background="@drawable/bg_primary"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="دنبال کردن من"
+                android:textColor="#FFFFFF" />
+        </FrameLayout>
+    </FrameLayout>
+
+    <!-- دکمه‌ها -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/rideButton"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="2"
+            android:background="@drawable/bg_primary"
+            android:text="شروع سفر"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/historyButton"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tab"
+            android:text="سفرها"
+            android:textColor="#3C4655" />
+
+        <Button
+            android:id="@+id/exportButton"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_tab"
+            android:text="خروجی"
+            android:textColor="#3C4655" />
+    </LinearLayout>
+
+    <!-- کارت‌های آمار: راست به چپ = مسافت، میانگین، حداکثر، زمان -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="12dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_card"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="مسافت (km)"
+                android:textColor="#78828F"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/distanceValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="۰٫۰۰"
+                android:textColor="#0288D1"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_card"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="میانگین (km/h)"
+                android:textColor="#78828F"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/avgValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="۰٫۰"
+                android:textColor="#0288D1"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_card"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="حداکثر (km/h)"
+                android:textColor="#78828F"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/maxValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="۰٫۰"
+                android:textColor="#0288D1"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_card"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="زمان سفر"
+                android:textColor="#78828F"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tripTimeValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="۰۰:۰۰:۰۰"
+                android:textColor="#0288D1"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
