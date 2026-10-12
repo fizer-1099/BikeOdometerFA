@@ -15,7 +15,7 @@ kotlinOptions {
     jvmTarget = "17"
 }
     defaultConfig {
-        applicationId = "ir.balasari.bikeodometer"
+        applicationId = "fizer.ir"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
