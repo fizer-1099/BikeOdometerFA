@@ -52,7 +52,7 @@ object RideStore {
         return try {
             f.readLines().mapNotNull { line ->
                 val p = line.split(",")
-                if (p.size == 2) {
+                if (p.size >= 2) {
                     val la = p[0].toDoubleOrNull()
                     val lo = p[1].toDoubleOrNull()
                     if (la != null && lo != null) Pair(la, lo) else null

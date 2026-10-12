@@ -169,7 +169,7 @@ class TrackingService : Service() {
     }
 
     private fun addPoint(loc: Location) {
-        RideStore.appendPoint(this, loc.latitude, loc.longitude)
+        RouteLog.append(this, loc.latitude, loc.longitude, loc.time)
         points++
     }
 

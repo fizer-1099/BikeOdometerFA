@@ -184,6 +184,31 @@ class MainActivity : Activity() {
         }
         findViewById<Button>(R.id.viewBannerClose).setOnClickListener { closeView() }
 
+        // دکمه‌های زوم نقشه
+        map.setBuiltInZoomControls(false)
+        val zoomBox = LinearLayout(this)
+        zoomBox.orientation = LinearLayout.VERTICAL
+        for ((label, step) in listOf("+" to 1, "−" to -1)) {
+            val zb = Button(this)
+            zb.text = label
+            zb.textSize = 22f
+            zb.minWidth = 0
+            zb.minHeight = 0
+            zb.setBackgroundResource(R.drawable.bg_primary)
+            zb.setTextColor(Color.WHITE)
+            val zbp = LinearLayout.LayoutParams(dp(48), dp(48))
+            zbp.setMargins(0, 0, 0, dp(8))
+            zb.layoutParams = zbp
+            zb.setOnClickListener { if (step > 0) map.controller.zoomIn() else map.controller.zoomOut() }
+            zoomBox.addView(zb)
+        }
+        val zoomLp = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        zoomLp.gravity = Gravity.CENTER_VERTICAL or Gravity.END
+        zoomLp.setMargins(dp(12), 0, dp(12), 0)
+        (mapPage as android.widget.FrameLayout).addView(zoomBox, zoomLp)
+
         tabGauge.setOnClickListener { showPage(false) }
         tabMap.setOnClickListener { showPage(true) }
 
@@ -522,8 +547,8 @@ class MainActivity : Activity() {
     private fun showRideMenu(r: Ride) {
         dlg()
             .setTitle(r.stamp)
-            .setItems(arrayOf("نمایش مسیر روی نقشه", "حذف سفر")) { _, which ->
-                if (which == 0) viewRide(r) else confirmDelete(r)
+            .setItems(arrayOf("نمایش مسیر روی نقشه", "اشتراک مسیر (GPX)", "حذف سفر")) { _, which ->
+                when (which) { 0 -> viewRide(r); 1 -> shareGpx(r); else -> confirmDelete(r) }
             }
             .show()
     }
@@ -725,6 +750,18 @@ class MainActivity : Activity() {
         val on = s.getBoolean("float_on", false) && FloatingOverlay.canDraw(this)
         fl.addView(segmented(listOf("خاموش", "روشن"), if (on) 1 else 0) { i -> setFloating(i == 1) })
         settingsContainer.addView(fl)
+
+        // باتری
+        val bat = card()
+        bat.addView(tv("محدودیت باتری", 14f, R.color.text_primary, true))
+        bat.addView(
+            tv(
+                "اگر ثبت مسیر با صفحه‌ی خاموش قطع می‌شود: اطلاعات برنامه ← باتری ← «بدون محدودیت».",
+                12f, R.color.text_secondary, false, 6
+            )
+        )
+        bat.addView(segmented(listOf("باز کردن اطلاعات برنامه"), -1) { openBatterySettings() })
+        settingsContainer.addView(bat)
 
         // درباره
         val about = card()
