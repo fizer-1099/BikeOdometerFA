@@ -25,6 +25,7 @@ class GaugeView @JvmOverloads constructor(
         set(value) { field = value; invalidate() }
 
     var unitLabel = "km/h"
+    var scales: FloatArray = floatArrayOf(60f, 120f, 180f, 240f)
     private var shown = 0f
     private var target = 0f
     private var animator: ValueAnimator? = null
@@ -76,10 +77,10 @@ class GaugeView @JvmOverloads constructor(
 
     private fun scaleMax(): Float {
         val v = max(max(shown, target), limit)
-        for (s in floatArrayOf(60f, 120f, 180f, 240f)) {
+        for (s in scales) {
             if (v <= s * 0.95f) return s
         }
-        return 240f
+        return scales.last()
     }
 
     override fun onDraw(canvas: Canvas) {

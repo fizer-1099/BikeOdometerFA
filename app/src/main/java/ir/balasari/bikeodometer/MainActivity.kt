@@ -103,6 +103,13 @@ class MainActivity : Activity() {
     private var lastShownPoints = -1
     private var uiActive: Boolean? = null
     private var recoveryDialogShown = false
+    private var askedActivity = false
+    private var filterMode = "all"
+    private val modeButtons = ArrayList<Button>()
+    private var tripsFilterRow: View? = null
+    private lateinit var maxBox: View
+    private lateinit var stepsBox: View
+    private lateinit var stepsValue: TextView
 
     // پوسته‌ی انتخابی (۰ سیستم، ۱ روشن، ۲ تیره) را روی Configuration اعمال می‌کند.
     override fun attachBaseContext(base: Context) {
@@ -159,6 +166,11 @@ class MainActivity : Activity() {
         maxValueText = m[1]
         val t = addStat("زمان سفر", 15f)
         tripTimeValue = t[1]
+        val st = addStat("قدم", 15f)
+        stepsValue = st[1]
+        stepsBox = st[0].parent as View
+        stepsBox.visibility = View.GONE
+        maxBox = maxTitle.parent as View
 
         // نقشه
         map.setTileSource(TileSourceFactory.MAPNIK)
@@ -224,6 +236,7 @@ class MainActivity : Activity() {
             if (RideStore.state(this).getBoolean("active", false)) confirmStop() else onStartClicked()
         }
         findViewById<Button>(R.id.exportButton).setOnClickListener { exportCsv() }
+        buildModeRow()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -348,6 +361,94 @@ class MainActivity : Activity() {
         }
     }
 
+    // ---- نوع سفر
+    private fun buildModeRow() {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.setPadding(dp(12), dp(8), dp(12), 0)
+        modeButtons.clear()
+        for (m in Modes.all) {
+            val b = Button(this)
+            b.text = m.emoji + Char(10) + m.label
+            b.textSize = 11f
+            b.minWidth = 0
+            b.minHeight = 0
+            b.setPadding(dp(2), dp(6), dp(2), dp(6))
+            val lp = LinearLayout.LayoutParams(0, dp(58), 1f)
+            lp.setMargins(dp(3), 0, dp(3), 0)
+            b.layoutParams = lp
+            b.setOnClickListener { selectMode(m.id) }
+            row.addView(b)
+            modeButtons.add(b)
+        }
+        (homePage as LinearLayout).addView(row, 1)
+        refreshModeRow()
+    }
+
+    private fun refreshModeRow() {
+        if (modeButtons.isEmpty()) return
+        val st = RideStore.state(this)
+        val active = st.getBoolean("active", false)
+        val cur = if (active) (st.getString("mode", "bike") ?: "bike") else Modes.currentId(this)
+        for ((i, m) in Modes.all.withIndex()) {
+            val sel = m.id == cur
+            val b = modeButtons[i]
+            b.setBackgroundResource(if (sel) R.drawable.bg_primary else R.drawable.bg_tab)
+            b.setTextColor(if (sel) Color.WHITE else col(R.color.tab_text))
+            b.alpha = if (active && !sel) 0.45f else 1f
+        }
+    }
+
+    private fun selectMode(id: String) {
+        if (RideStore.state(this).getBoolean("active", false)) {
+            Toast.makeText(this, "نوع سفر را فقط قبل از شروع می‌توانی عوض کنی.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val s = RideStore.settings(this)
+        val m = Modes.byId(id)
+        s.edit().putString("mode", id).putInt("limit", s.getInt("limit_" + id, m.defaultLimit)).apply()
+        refreshModeRow()
+        updateLimitUi()
+        refreshUi()
+    }
+
+    private fun buildFilterRow(onChange: () -> Unit): LinearLayout {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.setPadding(dp(12), dp(8), dp(12), dp(4))
+        val ids = listOf("all") + Modes.all.map { it.id }
+        for (id in ids) {
+            val b = Button(this)
+            b.text = if (id == "all") "همه" else Modes.byId(id).emoji
+            b.textSize = 14f
+            b.minWidth = 0
+            b.minHeight = 0
+            val sel = filterMode == id
+            b.setBackgroundResource(if (sel) R.drawable.bg_primary else R.drawable.bg_tab)
+            b.setTextColor(if (sel) Color.WHITE else col(R.color.tab_text))
+            val lp = LinearLayout.LayoutParams(0, dp(40), 1f)
+            lp.setMargins(dp(3), 0, dp(3), 0)
+            b.layoutParams = lp
+            b.setOnClickListener {
+                filterMode = id
+                onChange()
+            }
+            row.addView(b)
+        }
+        return row
+    }
+
+    private fun refreshTripsFilter() {
+        val page = tripsPage as LinearLayout
+        tripsFilterRow?.let { page.removeView(it) }
+        val row = buildFilterRow { refreshTrips() }
+        page.addView(row, 1)
+        tripsFilterRow = row
+    }
+
+    private fun filteredRides(): List<Ride> =
+        RideStore.loadRides(this).filter { filterMode == "all" || it.mode == filterMode }
+
     private fun showPage(showMap: Boolean) {
         gaugePage.visibility = if (showMap) View.GONE else View.VISIBLE
         mapPage.visibility = if (showMap) View.VISIBLE else View.GONE
@@ -386,7 +487,7 @@ class MainActivity : Activity() {
         val f = Units.factor(this)
         val shown = (s.getInt("limit", 30) * f).roundToInt() + delta
         val kmh = (shown.coerceAtLeast(3) / f).roundToInt().coerceIn(3, 300)
-        s.edit().putInt("limit", kmh).apply()
+        s.edit().putInt("limit", kmh).putInt("limit_" + Modes.currentId(this), kmh).apply()
         updateLimitUi()
     }
 
@@ -394,6 +495,7 @@ class MainActivity : Activity() {
         rideButton.text = if (active) "پایان سفر" else "شروع سفر"
         rideButton.setBackgroundResource(if (active) R.drawable.bg_stop else R.drawable.bg_primary)
         statusText.text = if (active) "● در حال ثبت" else "● متوقف"
+        refreshModeRow()
         statusText.setTextColor(col(if (active) R.color.ok else R.color.text_secondary))
     }
 
@@ -418,6 +520,11 @@ class MainActivity : Activity() {
         maxValueText.text = Units.speedText(this, p.getFloat("max", 0f))
         avgValueText.text = Units.speedText(this, p.getFloat("average", 0f))
         distanceValueText.text = Units.distText(this, p.getFloat("distance", 0f))
+        val shownMode = Modes.byId(if (active) p.getString("mode", "bike") else Modes.currentId(this))
+        maxBox.visibility = if (shownMode.hasSteps) View.GONE else View.VISIBLE
+        stepsBox.visibility = if (shownMode.hasSteps) View.VISIBLE else View.GONE
+        stepsValue.text = String.format(fa, "%d", p.getInt("steps", 0))
+        gauge.scales = shownMode.scales
 
         if (homePage.visibility == View.VISIBLE && mapPage.visibility == View.VISIBLE) refreshRoute()
         checkStaleRide(p)
@@ -446,6 +553,12 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS)) {
                 missing.add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+        if (Build.VERSION.SDK_INT >= 29 && Modes.currentMode(this).hasSteps &&
+            !granted(Manifest.permission.ACTIVITY_RECOGNITION) && !askedActivity
+        ) {
+            missing.add(Manifest.permission.ACTIVITY_RECOGNITION)
+            askedActivity = true
         }
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), permRequest)
@@ -532,7 +645,8 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ سفرها
 
     private fun refreshTrips() {
-        val rides = RideStore.loadRides(this).reversed()
+        val rides = filteredRides().reversed()
+        refreshTripsFilter()
         tripsEmpty.visibility = if (rides.isEmpty()) View.VISIBLE else View.GONE
         tripsList.adapter = object : ArrayAdapter<Ride>(
             this, android.R.layout.simple_list_item_2, android.R.id.text1, rides
@@ -543,9 +657,9 @@ class MainActivity : Activity() {
                 val km = Units.distText(this@MainActivity, r.km.toFloat())
                 val dur = RideStore.formatDuration(r.elapsed)
                 val t1 = v.findViewById<TextView>(android.R.id.text1)
-                t1.text = km + " " + Units.distWord(this@MainActivity) + "  •  " + dur
+                t1.text = Modes.byId(r.mode).emoji + " " + km + " " + Units.distWord(this@MainActivity) + "  •  " + dur
                 t1.setTextColor(col(R.color.text_primary))
-                var sub = r.stamp
+                var sub = r.stamp + (if (r.steps > 0) "  •  " + String.format(fa, "%d", r.steps) + " قدم" else "")
                 if (r.avgKmh > 0) sub += "  •  میانگین " + Units.speedText(this@MainActivity, r.avgKmh.toFloat())
                 if (r.maxKmh > 0) sub += " | حداکثر " + Units.speedText(this@MainActivity, r.maxKmh.toFloat())
                 val t2 = v.findViewById<TextView>(android.R.id.text2)
@@ -611,7 +725,7 @@ class MainActivity : Activity() {
 
     /** CSV همیشه با واحد متریک (کیلومتر) خروجی می‌گیرد. */
     private fun exportCsv() {
-        val rides = RideStore.loadRides(this)
+        val rides = filteredRides()
         if (rides.isEmpty()) {
             Toast.makeText(this, "هنوز گزارشی برای خروجی وجود ندارد.", Toast.LENGTH_SHORT).show()
             return
@@ -649,7 +763,8 @@ class MainActivity : Activity() {
 
     private fun refreshRecords() {
         recordsContainer.removeAllViews()
-        val rides = RideStore.loadRides(this)
+        recordsContainer.addView(buildFilterRow { refreshRecords() })
+        val rides = filteredRides()
         if (rides.isEmpty()) {
             addRecord("هنوز رکوردی ثبت نشده", "—", "اولین سفرت رو شروع کن")
             return
@@ -680,6 +795,8 @@ class MainActivity : Activity() {
             String.format(fa, "%d", rides.size) + " سفر"
         )
         addRecord("🕒 مجموع زمان سواری", RideStore.formatDuration(totalSec), null)
+        val totalSteps = rides.sumOf { it.steps }
+        if (totalSteps > 0) addRecord("👣 مجموع قدم‌ها", String.format(fa, "%d", totalSteps), null)
     }
 
     // ------------------------------------------------------------------ تنظیمات
@@ -779,7 +896,7 @@ class MainActivity : Activity() {
         // درباره
         val about = card()
         about.addView(tv("اف کیلومتر", 20f, R.color.accent, true))
-        about.addView(tv("کیلومترشمار و ثبت مسیر دوچرخه", 13f, R.color.text_secondary, false, 2))
+        about.addView(tv("کیلومترشمار و ثبت مسیر؛ دوچرخه، پیاده‌روی، موتور و ماشین", 13f, R.color.text_secondary, false, 2))
         about.addView(tv("سازنده: نوید بلانیان", 15f, R.color.text_primary, true, 12))
         val ver = try {
             packageManager.getPackageInfo(packageName, 0).versionName

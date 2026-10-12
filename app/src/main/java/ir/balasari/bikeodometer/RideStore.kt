@@ -16,7 +16,9 @@ data class Ride(
     val elapsed: Long,
     val moving: Long,
     val maxKmh: Double,
-    val avgKmh: Double
+    val avgKmh: Double,
+    val mode: String = "bike",
+    val steps: Int = 0
 )
 
 /** حالت سفر جاری، مسیر، تنظیمات و تاریخچه؛ بین Activity و Service مشترک است. */
@@ -39,6 +41,7 @@ object RideStore {
             .putBoolean("active", true)
             .putLong("start_ms", now)
             .putLong("last_update", now)
+            .putString("mode", settings(c).getString("mode", "bike") ?: "bike")
             .apply()
         try { routeFile(c).delete() } catch (_: Exception) {}
     }
@@ -78,6 +81,8 @@ object RideStore {
         val moving = p.getLong("moving", 0L)
         val maxK = p.getFloat("max", 0f)
         val avgK = p.getFloat("average", 0f)
+        val mode = p.getString("mode", "bike") ?: "bike"
+        val steps = p.getInt("steps", 0)
         p.edit().putBoolean("active", false).putLong("elapsed", elapsed).putFloat("speed", 0f).apply()
 
         if (distance > 0.01f) {
@@ -89,7 +94,9 @@ object RideStore {
                 moving.toString(),
                 String.format(Locale.US, "%.1f", maxK),
                 String.format(Locale.US, "%.1f", avgK),
-                start.toString()
+                start.toString(),
+                mode,
+                steps.toString()
             ).joinToString(",")
             val h = c.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
             val old = h.getString("items", "") ?: ""
@@ -126,7 +133,9 @@ object RideStore {
                 elapsed = elapsed,
                 moving = p.getOrNull(3)?.toLongOrNull() ?: 0L,
                 maxKmh = p.getOrNull(4)?.toDoubleOrNull() ?: 0.0,
-                avgKmh = avg
+                avgKmh = avg,
+                mode = p.getOrNull(7) ?: "bike",
+                steps = p.getOrNull(8)?.toIntOrNull() ?: 0
             )
         }
 

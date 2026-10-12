@@ -14,7 +14,7 @@
 
 **۱. موقعیت مکانی دقیق (GPS).** وقتی سفر را شروع می‌کنی، برنامه موقعیتت را برای محاسبه‌ی مسافت، سرعت و مسیر می‌خواند. این کار با صفحه‌ی خاموش هم ادامه دارد و یک اعلان دائمی نشان داده می‌شود. وقتی برنامه باز است، موقعیت برای نمایش روی نقشه هم خوانده می‌شود. موقعیت از طریق سرویس موقعیت‌یابی Google Play Services گرفته می‌شود که توسط گوگل ارائه می‌شود و تابع سیاست حریم خصوصی گوگل است.
 
-**۲. اطلاعات سفرها.** تاریخ، مسافت، مدت، سرعت میانگین و حداکثر، و نقاط مسیر (همراه با زمان) در حافظه‌ی داخلی برنامه روی گوشی ذخیره می‌شود.
+**۲. اطلاعات سفرها.** نوع سفر (دوچرخه، پیاده‌روی، موتور یا ماشین)، تعداد قدم‌ها (در پیاده‌روی)، تاریخ، مسافت، مدت، سرعت میانگین و حداکثر، و نقاط مسیر (همراه با زمان) در حافظه‌ی داخلی برنامه روی گوشی ذخیره می‌شود.
 
 **۳. تنظیمات.** واحد (کیلومتر یا مایل)، پوسته، سقف مجاز سرعت و محل پنجره‌ی شناور روی گوشی ذخیره می‌شود.
 
@@ -27,6 +27,7 @@
 - **موقعیت مکانی دقیق و تقریبی:** برای ثبت مسیر و نمایش روی نقشه.
 - **سرویس پیش‌زمینه (نوع مکان) و اعلان‌ها:** تا ثبت مسیر با صفحه‌ی خاموش ادامه پیدا کند.
 - **لرزش:** برای هشدار عبور از سقف مجاز سرعت.
+- **تشخیص فعالیت بدنی:** اختیاری است و فقط در حالت «پیاده‌روی» برای شمردن قدم‌ها از حسگر قدم‌شمار گوشی استفاده می‌شود. اگر مجوز را ندهی، قدم‌ها از روی مسافت تخمین زده می‌شوند.
 - **نمایش روی برنامه‌های دیگر:** اختیاری است و فقط اگر «نمایش شناور» را روشن کنی، برای نشان دادن سرعت روی بقیه‌ی برنامه‌ها استفاده می‌شود.
 - **اینترنت و وضعیت شبکه:** برای بارگیری نقشه.
 
@@ -70,7 +71,7 @@
 
 **1. Precise location (GPS).** When you start a ride, the app reads your location to compute distance, speed and route. This continues while the screen is off, with a persistent notification. While the app is open it also reads your location to show it on the map. Location is obtained through Google Play services location, which is provided by Google and subject to Google's privacy policy.
 
-**2. Ride records.** Date, distance, duration, average and maximum speed, and route points (with timestamps) are stored in the app's private storage on your phone.
+**2. Ride records.** Ride type (bike, walking, motorcycle or car), step count (walking), date, distance, duration, average and maximum speed, and route points (with timestamps) are stored in the app's private storage on your phone.
 
 **3. Settings.** Units (km or miles), theme, speed limit and the floating window position are stored on your phone.
 
@@ -83,6 +84,7 @@
 - **Precise and approximate location:** to record rides and show your position on the map.
 - **Foreground service (location type) and notifications:** so recording can continue with the screen off.
 - **Vibration:** for the speed limit alert.
+- **Physical activity recognition:** optional; used only in "Walking" mode to count steps with the phones step-counter sensor. If you deny it, steps are estimated from distance.
 - **Display over other apps:** optional; used only if you turn on "Floating display" to show your speed above other apps.
 - **Internet and network state:** to load the map.
 

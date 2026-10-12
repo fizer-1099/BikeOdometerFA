@@ -13,6 +13,10 @@ import android.location.Location
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.IBinder
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -26,7 +30,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlin.math.max
 
-class TrackingService : Service() {
+class TrackingService : Service(), SensorEventListener {
     companion object {
         const val ACTION_START = "ir.balasari.bikeodometer.START"
         const val ACTION_STOP = "ir.balasari.bikeodometer.STOP"
@@ -47,6 +51,12 @@ class TrackingService : Service() {
     private var movingSec = 0.0
     private var points = 0
     private var lastAlertMs = 0L
+    private var mode = "bike"
+    private var sensorManager: SensorManager? = null
+    private var stepSensorActive = false
+    private var stepBaseline = -1f
+    private var stepsAtStart = 0
+    private var sensorSteps = 0
     private var tone: ToneGenerator? = null
 
     override fun onCreate() {
@@ -89,6 +99,7 @@ class TrackingService : Service() {
         maxSpeed = p.getFloat("max", 0f).toDouble()
         movingSec = p.getLong("moving", 0L).toDouble()
         points = p.getInt("points", 0)
+        mode = p.getString("mode", "bike") ?: "bike"
         last = null
         outliers = 0
 
@@ -98,6 +109,7 @@ class TrackingService : Service() {
         try {
             fused.requestLocationUpdates(request, callback, mainLooper)
             tracking = true
+            startStepCounting()
         } catch (_: SecurityException) {
             stopSelf()
         }
@@ -129,7 +141,7 @@ class TrackingService : Service() {
                     // وقفه‌ی طولانی (مثلاً تونل): مرجع جدید بدون حساب کردن فاصله
                     dt >= 30.0 -> { last = loc; outliers = 0; addPoint(loc) }
                     // پرش غیرواقعی: نادیده؛ اگر سه بار پشت سر هم شد، مرجع جدید
-                    delta / dt > MAX_SPEED_MS -> {
+                    delta / dt > Modes.byId(mode).maxJumpMs -> {
                         outliers++
                         if (outliers >= 3) { last = loc; outliers = 0 }
                     }
@@ -147,7 +159,7 @@ class TrackingService : Service() {
             }
         }
 
-        if (speedKmh > maxSpeed && speedKmh < 120.0) maxSpeed = speedKmh
+        if (speedKmh > maxSpeed && speedKmh < Modes.byId(mode).maxSpeedKmh) maxSpeed = speedKmh
         val avg = if (movingSec > 0) distance * 3600.0 / movingSec else 0.0
 
         RideStore.state(this).edit()
@@ -157,6 +169,7 @@ class TrackingService : Service() {
             .putFloat("max", maxSpeed.toFloat())
             .putLong("moving", movingSec.toLong())
             .putInt("points", points)
+            .putInt("steps", currentSteps())
             .putLong("last_update", now)
             .apply()
 
@@ -166,6 +179,53 @@ class TrackingService : Service() {
         val text = "مسافت: " + Units.distText(this, distance.toFloat()) + " " + Units.distUnit(this) + " | سرعت: " + Units.speedText(this, speedKmh.toFloat()) + " " + Units.speedUnit(this)
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    // ---- شمارنده‌ی قدم (حالت پیاده‌روی)
+    private fun startStepCounting() {
+        if (!Modes.byId(mode).hasSteps) return
+        stepsAtStart = RideStore.state(this).getInt("steps", 0)
+        stepBaseline = -1f
+        sensorSteps = 0
+        try {
+            val permOk = Build.VERSION.SDK_INT < 29 ||
+                ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.ACTIVITY_RECOGNITION
+                ) == PackageManager.PERMISSION_GRANTED
+            if (!permOk) return
+            val sm = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            val sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
+            stepSensorActive = sm.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager = sm
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun stopStepCounting() {
+        try { sensorManager?.unregisterListener(this) } catch (_: Exception) {}
+        if (stepSensorActive) {
+            RideStore.state(this).edit().putInt("steps", currentSteps()).apply()
+        }
+        stepSensorActive = false
+        sensorManager = null
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event == null || event.sensor.type != Sensor.TYPE_STEP_COUNTER || event.values.isEmpty()) return
+        val total = event.values[0]
+        if (stepBaseline < 0f) stepBaseline = total
+        sensorSteps = (total - stepBaseline).toInt().coerceAtLeast(0)
+        RideStore.state(this).edit().putInt("steps", stepsAtStart + sensorSteps).apply()
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    /** قدم‌ها: از حسگر، یا (اگر حسگر/مجوز نبود) تخمین از روی مسافت. */
+    private fun currentSteps(): Int {
+        val m = Modes.byId(mode)
+        if (!m.hasSteps) return 0
+        if (stepSensorActive) return stepsAtStart + sensorSteps
+        return if (m.strideM > 0.0) (distance * 1000.0 / m.strideM).toInt() else 0
     }
 
     private fun addPoint(loc: Location) {
@@ -199,6 +259,7 @@ class TrackingService : Service() {
             try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
             tracking = false
         }
+        stopStepCounting()
         RideStore.finishRide(this, System.currentTimeMillis())
         FloatingOverlay.hide(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -240,6 +301,7 @@ class TrackingService : Service() {
     override fun onDestroy() {
         try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
         try { tone?.release() } catch (_: Exception) {}
+        try { stopStepCounting() } catch (_: Exception) {}
         FloatingOverlay.hide(this)
         super.onDestroy()
     }
