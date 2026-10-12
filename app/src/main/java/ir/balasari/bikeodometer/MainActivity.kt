@@ -236,6 +236,11 @@ class MainActivity : Activity() {
         updateUnitLabels()
         updateLimitUi()
         showTab(savedInstanceState?.getInt("tab", 0) ?: 0)
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+            ) { backAction() }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -333,6 +338,14 @@ class MainActivity : Activity() {
         if (i == 1) refreshTrips()
         if (i == 2) refreshRecords()
         if (i == 3) refreshSettings()
+    }
+
+    private fun backAction() {
+        when {
+            viewingRide != null -> closeView()
+            currentTab != 0 -> showTab(0)
+            else -> finish()
+        }
     }
 
     private fun showPage(showMap: Boolean) {
