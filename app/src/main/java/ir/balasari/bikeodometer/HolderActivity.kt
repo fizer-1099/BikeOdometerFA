@@ -203,7 +203,7 @@ class HolderActivity : Activity() {
         unitText.text = if (limitOn) Units.speedUnit(this) + "  •  سقف " + Units.speedText(this, limit.toFloat(), 0) else Units.speedUnit(this)
 
         val now = System.currentTimeMillis()
-        val elapsed = if (active) (now - p.getLong("start_ms", now)) / 1000L else p.getLong("elapsed", 0L)
+        val elapsed = if (active) RideStore.activeElapsed(p, now) else p.getLong("elapsed", 0L)
         distV.text = Units.distText(this, p.getFloat("distance", 0f))
         avgV.text = Units.speedText(this, p.getFloat("average", 0f))
         maxV.text = Units.speedText(this, p.getFloat("max", 0f))

@@ -34,6 +34,8 @@ class TrackingService : Service(), SensorEventListener {
     companion object {
         const val ACTION_START = "ir.balasari.bikeodometer.START"
         const val ACTION_STOP = "ir.balasari.bikeodometer.STOP"
+        const val ACTION_PAUSE = "ir.balasari.bikeodometer.PAUSE"
+        const val ACTION_RESUME = "ir.balasari.bikeodometer.RESUME"
         private const val CHANNEL = "bike_tracking"
         private const val NOTIFICATION_ID = 17
         private const val MAX_ACCURACY = 30f     // متر؛ نقطه‌های بدتر نادیده گرفته می‌شوند
@@ -52,6 +54,7 @@ class TrackingService : Service(), SensorEventListener {
     private var points = 0
     private var lastAlertMs = 0L
     private var mode = "bike"
+    private var paused = false
     private var sensorManager: SensorManager? = null
     private var stepSensorActive = false
     private var stepBaseline = -1f
@@ -72,6 +75,14 @@ class TrackingService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_PAUSE) {
+            pauseTracking()
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_RESUME) {
+            resumeTracking()
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             stopTracking()
             stopSelf()
@@ -94,7 +105,7 @@ class TrackingService : Service(), SensorEventListener {
         // وضعیت را از prefs بخوان تا «ادامه‌ی سفر» بعد از kill شدن هم کار کند.
         val p = RideStore.state(this)
         if (!p.contains("start_ms")) p.edit().putLong("start_ms", System.currentTimeMillis()).apply()
-        p.edit().putBoolean("active", true).apply()
+        p.edit().putBoolean("active", true).putBoolean("paused", false).apply()
         distance = p.getFloat("distance", 0f).toDouble()
         maxSpeed = p.getFloat("max", 0f).toDouble()
         movingSec = p.getLong("moving", 0L).toDouble()
@@ -116,7 +127,7 @@ class TrackingService : Service(), SensorEventListener {
     }
 
     private fun processLocation(loc: Location) {
-        if (!tracking) return
+        if (!tracking || paused) return
         val now = System.currentTimeMillis()
         if (loc.hasAccuracy() && loc.accuracy > MAX_ACCURACY) return
 
@@ -254,6 +265,47 @@ class TrackingService : Service(), SensorEventListener {
         }
     }
 
+    // ---- مکث و ادامه
+    private fun pauseTracking() {
+        if (!tracking || paused) return
+        try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
+        stopStepCounting()
+        paused = true
+        last = null
+        outliers = 0
+        RideStore.state(this).edit()
+            .putBoolean("paused", true)
+            .putLong("pause_start", System.currentTimeMillis())
+            .putFloat("speed", 0f)
+            .apply()
+        FloatingOverlay.hide(this)
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification("مکث شده"))
+    }
+
+    private fun resumeTracking() {
+        if (!tracking || !paused) return
+        val now = System.currentTimeMillis()
+        val p = RideStore.state(this)
+        val total = p.getLong("paused_ms", 0L) + (now - p.getLong("pause_start", now))
+        p.edit().putBoolean("paused", false).putLong("paused_ms", total).putLong("last_update", now).apply()
+        paused = false
+        last = null
+        outliers = 0
+        startStepCounting()
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
+            .setMinUpdateIntervalMillis(1000L)
+            .build()
+        try {
+            fused.requestLocationUpdates(request, callback, mainLooper)
+        } catch (_: SecurityException) {
+            stopSelf()
+            return
+        }
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification("در حال ثبت مسیر"))
+    }
+
     private fun stopTracking() {
         if (tracking) {
             try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
@@ -280,6 +332,11 @@ class TrackingService : Service(), SensorEventListener {
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             flags
         )
+        val pauseIntent = PendingIntent.getService(
+            this, 2,
+            Intent(this, TrackingService::class.java).setAction(if (paused) ACTION_RESUME else ACTION_PAUSE),
+            flags
+        )
         val stop = PendingIntent.getService(
             this, 1,
             Intent(this, TrackingService::class.java).setAction(ACTION_STOP),
@@ -292,6 +349,7 @@ class TrackingService : Service(), SensorEventListener {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
+            .addAction(0, if (paused) "ادامه" else "مکث", pauseIntent)
             .addAction(0, "پایان سفر", stop)
             .build()
     }

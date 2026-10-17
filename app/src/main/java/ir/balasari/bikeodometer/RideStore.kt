@@ -76,14 +76,14 @@ object RideStore {
         val p = state(c)
         if (!p.getBoolean("active", false)) return
         val start = p.getLong("start_ms", endMs)
-        val elapsed = ((endMs - start) / 1000L).coerceAtLeast(0L)
+        val elapsed = activeElapsed(p, endMs)
         val distance = p.getFloat("distance", 0f)
         val moving = p.getLong("moving", 0L)
         val maxK = p.getFloat("max", 0f)
         val avgK = p.getFloat("average", 0f)
         val mode = p.getString("mode", "bike") ?: "bike"
         val steps = p.getInt("steps", 0)
-        p.edit().putBoolean("active", false).putLong("elapsed", elapsed).putFloat("speed", 0f).apply()
+        p.edit().putBoolean("active", false).putBoolean("paused", false).putLong("elapsed", elapsed).putFloat("speed", 0f).apply()
 
         if (distance > 0.01f) {
             val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(start))
@@ -149,6 +149,14 @@ object RideStore {
         }
         c.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
             .edit().putString("items", lines.joinToString("\n")).apply()
+    }
+
+    /** ثانیه‌های سفر بدون زمان مکث‌ها. */
+    fun activeElapsed(p: SharedPreferences, now: Long): Long {
+        val start = p.getLong("start_ms", now)
+        var pausedMs = p.getLong("paused_ms", 0L)
+        if (p.getBoolean("paused", false)) pausedMs += now - p.getLong("pause_start", now)
+        return ((now - start - pausedMs) / 1000L).coerceAtLeast(0L)
     }
 
     fun formatDuration(sec: Long): String {

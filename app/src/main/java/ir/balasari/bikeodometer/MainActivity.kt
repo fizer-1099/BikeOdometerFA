@@ -104,6 +104,16 @@ class MainActivity : Activity() {
     private var uiActive: Boolean? = null
     private var recoveryDialogShown = false
     private var askedActivity = false
+    private lateinit var pauseButton: Button
+    private lateinit var navInput: android.widget.EditText
+    private lateinit var navBanner: LinearLayout
+    private lateinit var navInfo: TextView
+    private var destMarker: Marker? = null
+    private val navLine = Polyline()
+    private var destLat = 0.0
+    private var destLon = 0.0
+    private var destName = ""
+    private var navBusy = false
     private var filterMode = "all"
     private val modeButtons = ArrayList<Button>()
     private var tripsFilterRow: View? = null
@@ -237,6 +247,8 @@ class MainActivity : Activity() {
         }
         findViewById<Button>(R.id.exportButton).setOnClickListener { exportCsv() }
         buildModeRow()
+        buildPauseButton()
+        buildNavUi()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -355,6 +367,7 @@ class MainActivity : Activity() {
 
     private fun backAction() {
         when {
+            navBanner.visibility == View.VISIBLE -> clearNav()
             viewingRide != null -> closeView()
             currentTab != 0 -> showTab(0)
             else -> finish()
@@ -449,6 +462,263 @@ class MainActivity : Activity() {
     private fun filteredRides(): List<Ride> =
         RideStore.loadRides(this).filter { filterMode == "all" || it.mode == filterMode }
 
+    // ---- مکث و ادامه
+    private fun buildPauseButton() {
+        val parent = rideButton.parent as LinearLayout
+        rideButton.layoutParams = LinearLayout.LayoutParams(0, dp(56), 2f)
+        pauseButton = Button(this)
+        pauseButton.text = "مکث"
+        pauseButton.textSize = 16f
+        pauseButton.setBackgroundResource(R.drawable.bg_tab)
+        pauseButton.setTextColor(col(R.color.tab_text))
+        val plp = LinearLayout.LayoutParams(0, dp(56), 1f)
+        plp.setMargins(dp(8), 0, 0, 0)
+        pauseButton.layoutParams = plp
+        pauseButton.visibility = View.GONE
+        pauseButton.setOnClickListener { togglePause() }
+        parent.addView(pauseButton)
+    }
+
+    private fun togglePause() {
+        val p = RideStore.state(this)
+        if (!p.getBoolean("active", false)) return
+        if (!isServiceRunning()) {
+            Toast.makeText(this, "ثبت مسیر در حال اجرا نیست.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val paused = p.getBoolean("paused", false)
+        startService(
+            Intent(this, TrackingService::class.java)
+                .setAction(if (paused) TrackingService.ACTION_RESUME else TrackingService.ACTION_PAUSE)
+        )
+        handler.postDelayed({ refreshUi() }, 300L)
+    }
+
+    // ---- جستجو و مسیریابی روی نقشه
+    private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
+
+    private fun buildNavUi() {
+        val frame = mapPage as android.widget.FrameLayout
+
+        val bar = LinearLayout(this)
+        bar.orientation = LinearLayout.HORIZONTAL
+        bar.gravity = Gravity.CENTER_VERTICAL
+        bar.setBackgroundResource(R.drawable.bg_card)
+        bar.setPadding(dp(10), dp(4), dp(6), dp(4))
+        navInput = android.widget.EditText(this)
+        navInput.hint = "جستجوی مکان یا آدرس"
+        navInput.setSingleLine(true)
+        navInput.textSize = 14f
+        navInput.setTextColor(col(R.color.text_primary))
+        navInput.setHintTextColor(col(R.color.text_secondary))
+        navInput.setBackgroundColor(Color.TRANSPARENT)
+        navInput.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        navInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                runSearch()
+                true
+            } else {
+                false
+            }
+        }
+        val go = Button(this)
+        go.text = "جستجو"
+        go.minWidth = 0
+        go.minHeight = 0
+        go.setBackgroundResource(R.drawable.bg_primary)
+        go.setTextColor(Color.WHITE)
+        go.setOnClickListener { runSearch() }
+        bar.addView(navInput, LinearLayout.LayoutParams(0, dp(44), 1f))
+        bar.addView(go, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)))
+        val barLp = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        barLp.gravity = Gravity.TOP
+        barLp.setMargins(dp(12), dp(12), dp(12), 0)
+        frame.addView(bar, barLp)
+
+        // دکمه‌ی «دنبال کردن من» را زیر نوار جستجو ببر
+        val fb = findViewById<Button>(R.id.followButton)
+        (fb.layoutParams as android.widget.FrameLayout.LayoutParams).topMargin = dp(72)
+
+        // نوار نتیجه‌ی مسیر
+        navBanner = LinearLayout(this)
+        navBanner.orientation = LinearLayout.VERTICAL
+        navBanner.setBackgroundResource(R.drawable.bg_card)
+        navBanner.setPadding(dp(12), dp(10), dp(12), dp(10))
+        navBanner.visibility = View.GONE
+        navInfo = TextView(this)
+        navInfo.textSize = 14f
+        navInfo.setTextColor(col(R.color.text_primary))
+        val btns = LinearLayout(this)
+        btns.orientation = LinearLayout.HORIZONTAL
+        btns.setPadding(0, dp(8), 0, 0)
+        val ext = Button(this)
+        ext.text = "مسیریابی با برنامه‌ی دیگر"
+        ext.textSize = 12f
+        ext.minHeight = 0
+        ext.setBackgroundResource(R.drawable.bg_primary)
+        ext.setTextColor(Color.WHITE)
+        ext.setOnClickListener { openExternalNav() }
+        val clr = Button(this)
+        clr.text = "پاک کردن"
+        clr.textSize = 12f
+        clr.minHeight = 0
+        clr.setBackgroundResource(R.drawable.bg_tab)
+        clr.setTextColor(col(R.color.tab_text))
+        clr.setOnClickListener { clearNav() }
+        val elp = LinearLayout.LayoutParams(0, dp(44), 2f)
+        val clp = LinearLayout.LayoutParams(0, dp(44), 1f)
+        clp.setMargins(dp(8), 0, 0, 0)
+        btns.addView(ext, elp)
+        btns.addView(clr, clp)
+        navBanner.addView(navInfo)
+        navBanner.addView(btns)
+        val nbLp = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        nbLp.gravity = Gravity.BOTTOM
+        nbLp.setMargins(dp(12), 0, dp(12), dp(84))
+        frame.addView(navBanner, nbLp)
+
+        navLine.outlinePaint.color = Color.rgb(245, 124, 0)
+        navLine.outlinePaint.strokeWidth = 10f
+
+        // لمس طولانی روی نقشه = انتخاب مقصد
+        map.overlays.add(
+            0,
+            org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
+                override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean = false
+                override fun longPressHelper(p: GeoPoint?): Boolean {
+                    if (p != null) setDestination(p.latitude, p.longitude, "نقطه‌ی انتخاب‌شده")
+                    return true
+                }
+            })
+        )
+    }
+
+    private fun runSearch() {
+        val q = navInput.text.toString().trim()
+        if (q.length < 2 || navBusy) return
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(navInput.windowToken, 0)
+        navBusy = true
+        val near = marker?.position
+        Thread {
+            val res = try {
+                Navigator.search(q, near?.latitude, near?.longitude)
+            } catch (_: Exception) {
+                null
+            }
+            runOnUiThread {
+                navBusy = false
+                when {
+                    res == null -> toast("جستجو ناموفق بود؛ اینترنت را بررسی کن.")
+                    res.isEmpty() -> toast("نتیجه‌ای پیدا نشد.")
+                    else -> showPlaceChoices(res)
+                }
+            }
+        }.start()
+    }
+
+    private fun showPlaceChoices(res: List<Navigator.Place>) {
+        dlg()
+            .setTitle("نتایج جستجو")
+            .setItems(res.map { it.name }.toTypedArray()) { _, i ->
+                setDestination(res[i].lat, res[i].lon, res[i].name)
+            }
+            .setNegativeButton("بستن", null)
+            .show()
+    }
+
+    private fun setDestination(lat: Double, lon: Double, name: String) {
+        destLat = lat
+        destLon = lon
+        destName = name
+        destMarker?.let { map.overlays.remove(it) }
+        val m = Marker(map)
+        m.position = GeoPoint(lat, lon)
+        m.title = name
+        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        map.overlays.add(m)
+        destMarker = m
+        followMe = false
+        map.controller.animateTo(GeoPoint(lat, lon))
+        map.invalidate()
+        navInfo.text = name + Char(10) + "در حال محاسبه‌ی مسیر…"
+        navBanner.visibility = View.VISIBLE
+        fetchRoute()
+    }
+
+    private fun fetchRoute() {
+        val from = marker?.position
+        if (from == null) {
+            navInfo.text = destName + Char(10) + "برای محاسبه‌ی مسیر، صبر کن موقعیتت (GPS) پیدا شود."
+            return
+        }
+        if (navBusy) return
+        navBusy = true
+        val profile = when (Modes.currentId(this)) {
+            "walk" -> "routed-foot"
+            "bike" -> "routed-bike"
+            else -> "routed-car"
+        }
+        val fLat = from.latitude
+        val fLon = from.longitude
+        Thread {
+            val r = try {
+                Navigator.route(profile, fLat, fLon, destLat, destLon)
+            } catch (_: Exception) {
+                null
+            }
+            runOnUiThread {
+                navBusy = false
+                showRoute(r)
+            }
+        }.start()
+    }
+
+    private fun durationText(totalMin: Int): String {
+        if (totalMin < 60) return String.format(fa, "%d", totalMin) + " دقیقه"
+        return String.format(fa, "%d", totalMin / 60) + " ساعت و " + String.format(fa, "%d", totalMin % 60) + " دقیقه"
+    }
+
+    private fun showRoute(r: Navigator.Route?) {
+        if (r == null) {
+            navInfo.text = destName + Char(10) + "مسیری پیدا نشد (یا سرور مسیریابی در دسترس نیست)."
+            return
+        }
+        navLine.setPoints(r.points)
+        if (!map.overlays.contains(navLine)) map.overlays.add(navLine)
+        val km = Units.distText(this, (r.distanceM / 1000.0).toFloat(), 1)
+        val minutes = Math.round(r.durationS / 60.0).toInt()
+        navInfo.text = destName + Char(10) + km + " " + Units.distWord(this) + "  •  " + durationText(minutes)
+        try {
+            map.zoomToBoundingBox(BoundingBox.fromGeoPoints(r.points), true, 120)
+        } catch (_: Exception) {
+        }
+        map.invalidate()
+    }
+
+    private fun clearNav() {
+        destMarker?.let { map.overlays.remove(it) }
+        destMarker = null
+        map.overlays.remove(navLine)
+        navBanner.visibility = View.GONE
+        map.invalidate()
+    }
+
+    private fun openExternalNav() {
+        val uri = Uri.parse(
+            "geo:" + destLat + "," + destLon + "?q=" + destLat + "," + destLon + "(" + Uri.encode(destName) + ")"
+        )
+        try {
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, uri), "باز کردن در برنامه‌ی مسیریاب"))
+        } catch (_: Exception) {
+            toast("برنامه‌ی مسیریابی پیدا نشد.")
+        }
+    }
+
     private fun showPage(showMap: Boolean) {
         gaugePage.visibility = if (showMap) View.GONE else View.VISIBLE
         mapPage.visibility = if (showMap) View.VISIBLE else View.GONE
@@ -465,6 +735,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         when {
+            navBanner.visibility == View.VISIBLE -> clearNav()
             viewingRide != null -> closeView()
             currentTab != 0 -> showTab(0)
             else -> super.onBackPressed()
@@ -515,7 +786,7 @@ class MainActivity : Activity() {
         gauge.setSpeed(if (active) Units.speedValue(this, p.getFloat("speed", 0f)) else 0f)
 
         val now = System.currentTimeMillis()
-        val elapsed = if (active) (now - p.getLong("start_ms", now)) / 1000L else p.getLong("elapsed", 0L)
+        val elapsed = if (active) RideStore.activeElapsed(p, now) else p.getLong("elapsed", 0L)
         tripTimeValue.text = RideStore.formatDuration(elapsed)
         maxValueText.text = Units.speedText(this, p.getFloat("max", 0f))
         avgValueText.text = Units.speedText(this, p.getFloat("average", 0f))
@@ -525,6 +796,13 @@ class MainActivity : Activity() {
         stepsBox.visibility = if (shownMode.hasSteps) View.VISIBLE else View.GONE
         stepsValue.text = String.format(fa, "%d", p.getInt("steps", 0))
         gauge.scales = shownMode.scales
+        val isPaused = active && p.getBoolean("paused", false)
+        pauseButton.visibility = if (active) View.VISIBLE else View.GONE
+        pauseButton.text = if (isPaused) "ادامه" else "مکث"
+        if (active) {
+            statusText.text = if (isPaused) "⏸ مکث شده" else "● در حال ثبت"
+            statusText.setTextColor(col(if (isPaused) R.color.accent else R.color.ok))
+        }
 
         if (homePage.visibility == View.VISIBLE && mapPage.visibility == View.VISIBLE) refreshRoute()
         checkStaleRide(p)

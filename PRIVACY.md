@@ -20,7 +20,9 @@
 
 **۴. نقشه.** تصویرهای نقشه از سرورهای OpenStreetMap از طریق اینترنت بارگیری می‌شوند. برای این کار، آدرس IP و ناحیه‌ای از نقشه که می‌بینی برای آن سرویس ارسال می‌شود و تابع سیاست OpenStreetMap Foundation است.
 
-**۵. خروجی‌ها.** فایل CSV یا GPX فقط وقتی تو درخواست کنی ساخته می‌شود و با برنامه‌ای که خودت انتخاب می‌کنی به اشتراک گذاشته می‌شود. نسخه‌ی موقت فایل در حافظه‌ی پنهان (cache) برنامه می‌ماند.
+**۵. جستجو و مسیریابی (اختیاری).** وقتی مکانی را جستجو می‌کنی، متن جستجو و یک ناحیه‌ی تقریبی اطراف موقعیتت به سرویس Nominatim (OpenStreetMap) فرستاده می‌شود. وقتی مسیر می‌گیری، مختصات مبدأ (موقعیت فعلی‌ات) و مقصد به سرور مسیریابی OpenStreetMap (routing.openstreetmap.de) فرستاده می‌شود. این کارها فقط با اقدام خودت انجام می‌شود و تابع سیاست آن سرویس‌هاست.
+
+**۶. خروجی‌ها.** فایل CSV یا GPX فقط وقتی تو درخواست کنی ساخته می‌شود و با برنامه‌ای که خودت انتخاب می‌کنی به اشتراک گذاشته می‌شود. نسخه‌ی موقت فایل در حافظه‌ی پنهان (cache) برنامه می‌ماند.
 
 ## مجوزها
 
@@ -77,7 +79,9 @@
 
 **4. Map.** Map tiles are downloaded over the internet from OpenStreetMap servers. This sends your IP address and the map area you are viewing to that service, which is governed by the OpenStreetMap Foundation's policies.
 
-**5. Exports.** CSV or GPX files are created only when you ask for them and are shared with the app you choose. A temporary copy stays in the app's cache.
+**5. Search and routing (optional).** When you search for a place, your search text and an approximate area around your location are sent to the Nominatim service (OpenStreetMap). When you request a route, the start (your current location) and destination coordinates are sent to the OpenStreetMap routing server (routing.openstreetmap.de). This happens only when you take the action and is governed by those services policies.
+
+**6. Exports.** CSV or GPX files are created only when you ask for them and are shared with the app you choose. A temporary copy stays in the app's cache.
 
 ## Permissions
 

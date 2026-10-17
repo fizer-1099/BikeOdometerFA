@@ -132,7 +132,7 @@ class HudActivity : Activity() {
         speedText.setTextColor(if (over) red else green)
 
         val now = System.currentTimeMillis()
-        val elapsed = if (active) (now - p.getLong("start_ms", now)) / 1000L else 0L
+        val elapsed = if (active) RideStore.activeElapsed(p, now) else 0L
         infoText.text = Units.distText(this, p.getFloat("distance", 0f)) +
             " " + Units.distUnit(this) + "  •  " + RideStore.formatDuration(elapsed)
 
