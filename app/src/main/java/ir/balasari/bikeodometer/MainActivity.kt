@@ -545,14 +545,17 @@ class MainActivity : Activity() {
         navBanner = LinearLayout(this)
         navBanner.orientation = LinearLayout.VERTICAL
         navBanner.setBackgroundResource(R.drawable.bg_card)
-        navBanner.setPadding(dp(12), dp(10), dp(12), dp(10))
+        navBanner.setPadding(dp(10), dp(8), dp(10), dp(8))
+        navBanner.alpha = 0.93f
         navBanner.visibility = View.GONE
         navInfo = TextView(this)
-        navInfo.textSize = 14f
+        navInfo.textSize = 13f
+        navInfo.maxLines = 2
+        navInfo.ellipsize = android.text.TextUtils.TruncateAt.END
         navInfo.setTextColor(col(R.color.text_primary))
         val btns = LinearLayout(this)
         btns.orientation = LinearLayout.HORIZONTAL
-        btns.setPadding(0, dp(8), 0, 0)
+        btns.setPadding(0, dp(6), 0, 0)
         val ext = Button(this)
         ext.text = "مسیریابی با برنامه‌ی دیگر"
         ext.textSize = 12f
@@ -567,8 +570,8 @@ class MainActivity : Activity() {
         clr.setBackgroundResource(R.drawable.bg_tab)
         clr.setTextColor(col(R.color.tab_text))
         clr.setOnClickListener { clearNav() }
-        val elp = LinearLayout.LayoutParams(0, dp(44), 2f)
-        val clp = LinearLayout.LayoutParams(0, dp(44), 1f)
+        val elp = LinearLayout.LayoutParams(0, dp(36), 2f)
+        val clp = LinearLayout.LayoutParams(0, dp(36), 1f)
         clp.setMargins(dp(8), 0, 0, 0)
         btns.addView(ext, elp)
         btns.addView(clr, clp)
@@ -578,7 +581,7 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
         nbLp.gravity = Gravity.BOTTOM
-        nbLp.setMargins(dp(12), 0, dp(12), dp(84))
+        nbLp.setMargins(dp(12), 0, dp(12), dp(8))
         frame.addView(navBanner, nbLp)
 
         navLine.outlinePaint.color = Color.rgb(245, 124, 0)
@@ -692,9 +695,9 @@ class MainActivity : Activity() {
         if (!map.overlays.contains(navLine)) map.overlays.add(navLine)
         val km = Units.distText(this, (r.distanceM / 1000.0).toFloat(), 1)
         val minutes = Math.round(r.durationS / 60.0).toInt()
-        navInfo.text = destName + Char(10) + km + " " + Units.distWord(this) + "  •  " + durationText(minutes)
+        navInfo.text = Modes.currentMode(this).emoji + " " + km + " " + Units.distWord(this) + "  •  " + durationText(minutes) + Char(10) + destName
         try {
-            map.zoomToBoundingBox(BoundingBox.fromGeoPoints(r.points), true, 120)
+            map.zoomToBoundingBox(BoundingBox.fromGeoPoints(r.points), true, 220)
         } catch (_: Exception) {
         }
         map.invalidate()
@@ -721,6 +724,7 @@ class MainActivity : Activity() {
 
     private fun showPage(showMap: Boolean) {
         gaugePage.visibility = if (showMap) View.GONE else View.VISIBLE
+        (modeButtons.firstOrNull()?.parent as? View)?.visibility = if (showMap) View.GONE else View.VISIBLE
         mapPage.visibility = if (showMap) View.VISIBLE else View.GONE
         tabGauge.setBackgroundResource(if (showMap) R.drawable.bg_tab else R.drawable.bg_primary)
         tabMap.setBackgroundResource(if (showMap) R.drawable.bg_primary else R.drawable.bg_tab)
