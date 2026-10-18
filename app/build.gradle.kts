@@ -20,8 +20,8 @@ android {
         applicationId = "fizer.ir"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionName = "1.1"
     }
 
     // کلید امضا فقط از متغیرهای محیطی (GitHub Secrets) خوانده می‌شود؛ هیچ رمزی توی کد نیست.
