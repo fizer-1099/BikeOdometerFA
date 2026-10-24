@@ -114,6 +114,13 @@ class MainActivity : Activity() {
     private var destLon = 0.0
     private var destName = ""
     private var navBusy = false
+    private var measuring = false
+    private val measurePts = ArrayList<GeoPoint>()
+    private val measureMarkers = ArrayList<Marker>()
+    private val measureLine = Polyline()
+    private lateinit var measureBanner: LinearLayout
+    private lateinit var measureInfo: TextView
+    private lateinit var measureButton: Button
     private var filterMode = "all"
     private val modeButtons = ArrayList<Button>()
     private var tripsFilterRow: View? = null
@@ -249,6 +256,7 @@ class MainActivity : Activity() {
         buildModeRow()
         buildPauseButton()
         buildNavUi()
+        buildMeasureUi()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -367,6 +375,7 @@ class MainActivity : Activity() {
 
     private fun backAction() {
         when {
+            measuring -> stopMeasure()
             navBanner.visibility == View.VISIBLE -> clearNav()
             viewingRide != null -> closeView()
             currentTab != 0 -> showTab(0)
@@ -610,9 +619,15 @@ class MainActivity : Activity() {
         map.overlays.add(
             0,
             org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
-                override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean = false
+                override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                    if (measuring && p != null) {
+                        addMeasurePoint(p)
+                        return true
+                    }
+                    return false
+                }
                 override fun longPressHelper(p: GeoPoint?): Boolean {
-                    if (p != null) setDestination(p.latitude, p.longitude, "نقطه‌ی انتخاب‌شده")
+                    if (p != null && !measuring) setDestination(p.latitude, p.longitude, "نقطه‌ی انتخاب‌شده")
                     return true
                 }
             })
@@ -741,6 +756,196 @@ class MainActivity : Activity() {
         }
     }
 
+    // ---- ابزار اندازه‌گیری فاصله و مساحت روی نقشه
+    private fun buildMeasureUi() {
+        val frame = mapPage as android.widget.FrameLayout
+
+        measureButton = Button(this)
+        measureButton.text = "📏 اندازه‌گیری"
+        measureButton.textSize = 13f
+        measureButton.minWidth = 0
+        measureButton.minHeight = 0
+        measureButton.setBackgroundResource(R.drawable.bg_tab)
+        measureButton.setTextColor(col(R.color.tab_text))
+        measureButton.setPadding(dp(12), 0, dp(12), 0)
+        measureButton.setOnClickListener { if (measuring) stopMeasure() else startMeasure() }
+        val mbLp = android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+        mbLp.gravity = Gravity.TOP or Gravity.START
+        mbLp.setMargins(dp(12), dp(120), dp(12), 0)
+        frame.addView(measureButton, mbLp)
+
+        measureBanner = LinearLayout(this)
+        measureBanner.orientation = LinearLayout.VERTICAL
+        measureBanner.setBackgroundResource(R.drawable.bg_card)
+        measureBanner.setPadding(dp(10), dp(8), dp(10), dp(8))
+        measureBanner.alpha = 0.95f
+        measureBanner.visibility = View.GONE
+        measureInfo = TextView(this)
+        measureInfo.textSize = 13f
+        measureInfo.setTextColor(col(R.color.text_primary))
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.setPadding(0, dp(6), 0, 0)
+        val labels = listOf("برگشت", "موقعیت من", "پاک کردن", "خروج")
+        for ((i, label) in labels.withIndex()) {
+            val b = Button(this)
+            b.text = label
+            b.textSize = 11f
+            b.minWidth = 0
+            b.minHeight = 0
+            b.setPadding(dp(2), 0, dp(2), 0)
+            b.setBackgroundResource(if (i == 3) R.drawable.bg_primary else R.drawable.bg_tab)
+            b.setTextColor(if (i == 3) Color.WHITE else col(R.color.tab_text))
+            val lp = LinearLayout.LayoutParams(0, dp(36), 1f)
+            if (i > 0) lp.setMargins(dp(6), 0, 0, 0)
+            b.layoutParams = lp
+            b.setOnClickListener {
+                when (i) {
+                    0 -> undoMeasure()
+                    1 -> addMyPositionToMeasure()
+                    2 -> clearMeasure()
+                    else -> stopMeasure()
+                }
+            }
+            row.addView(b)
+        }
+        measureBanner.addView(measureInfo)
+        measureBanner.addView(row)
+        val mnLp = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        mnLp.gravity = Gravity.BOTTOM
+        mnLp.setMargins(dp(12), 0, dp(12), dp(20))
+        frame.addView(measureBanner, mnLp)
+
+        measureLine.outlinePaint.color = Color.rgb(142, 36, 170)
+        measureLine.outlinePaint.strokeWidth = 8f
+    }
+
+    private fun startMeasure() {
+        measuring = true
+        clearNav()
+        measureBanner.visibility = View.VISIBLE
+        measureButton.setBackgroundResource(R.drawable.bg_primary)
+        measureButton.setTextColor(Color.WHITE)
+        if (!map.overlays.contains(measureLine)) map.overlays.add(measureLine)
+        updateMeasure()
+    }
+
+    private fun stopMeasure() {
+        measuring = false
+        clearMeasure()
+        map.overlays.remove(measureLine)
+        measureBanner.visibility = View.GONE
+        measureButton.setBackgroundResource(R.drawable.bg_tab)
+        measureButton.setTextColor(col(R.color.tab_text))
+        map.invalidate()
+    }
+
+    private fun clearMeasure() {
+        for (m in measureMarkers) map.overlays.remove(m)
+        measureMarkers.clear()
+        measurePts.clear()
+        updateMeasure()
+    }
+
+    private fun addMeasurePoint(p: GeoPoint) {
+        measurePts.add(p)
+        val m = Marker(map)
+        m.position = p
+        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+        val dot = android.graphics.drawable.GradientDrawable()
+        dot.shape = android.graphics.drawable.GradientDrawable.OVAL
+        dot.setColor(Color.rgb(142, 36, 170))
+        dot.setStroke(dp(2), Color.WHITE)
+        dot.setSize(dp(16), dp(16))
+        m.icon = dot
+        m.setInfoWindow(null)
+        map.overlays.add(m)
+        measureMarkers.add(m)
+        updateMeasure()
+    }
+
+    private fun undoMeasure() {
+        if (measurePts.isEmpty()) return
+        measurePts.removeAt(measurePts.size - 1)
+        val m = measureMarkers.removeAt(measureMarkers.size - 1)
+        map.overlays.remove(m)
+        updateMeasure()
+    }
+
+    private fun addMyPositionToMeasure() {
+        val me = marker?.position
+        if (me == null) {
+            toast("موقعیتت هنوز پیدا نشده.")
+            return
+        }
+        addMeasurePoint(GeoPoint(me.latitude, me.longitude))
+    }
+
+    private fun distLabel(meters: Double): String {
+        val km = meters / 1000.0
+        return if (Units.isMiles(this)) {
+            Units.distText(this, km.toFloat(), 2) + " " + Units.distUnit(this)
+        } else if (meters < 1000.0) {
+            String.format(fa, "%d", Math.round(meters).toInt()) + " متر"
+        } else {
+            Units.distText(this, km.toFloat(), 2) + " کیلومتر"
+        }
+    }
+
+    /** مساحت چندضلعی با تصویر محلی (برای مساحت‌های کوچک تا متوسط دقیق است). */
+    private fun polygonAreaM2(pts: List<GeoPoint>): Double {
+        val r = 6371000.0
+        val lat0 = Math.toRadians(pts.map { it.latitude }.average())
+        val lon0 = Math.toRadians(pts.map { it.longitude }.average())
+        val xs = pts.map { r * Math.cos(lat0) * (Math.toRadians(it.longitude) - lon0) }
+        val ys = pts.map { r * (Math.toRadians(it.latitude) - lat0) }
+        var s = 0.0
+        for (i in xs.indices) {
+            val j = (i + 1) % xs.size
+            s += xs[i] * ys[j] - xs[j] * ys[i]
+        }
+        return Math.abs(s) / 2.0
+    }
+
+    private fun areaLabel(m2: Double): String {
+        if (Units.isMiles(this)) return String.format(fa, "%.3f", m2 / 2589988.11) + " mi²"
+        return when {
+            m2 < 10000.0 -> String.format(fa, "%d", Math.round(m2).toInt()) + " متر مربع"
+            m2 < 1000000.0 -> String.format(fa, "%.2f", m2 / 10000.0) + " هکتار"
+            else -> String.format(fa, "%.2f", m2 / 1000000.0) + " کیلومتر مربع"
+        }
+    }
+
+    private fun updateMeasure() {
+        if (!::measureInfo.isInitialized) return
+        measureLine.setPoints(measurePts)
+        val n = measurePts.size
+        var total = 0.0
+        for (i in 1 until n) total += measurePts[i - 1].distanceToAsDouble(measurePts[i])
+        val sb = StringBuilder()
+        sb.append("📏 ").append(String.format(fa, "%d", n)).append(" نقطه")
+        if (n == 0) {
+            sb.append(Char(10)).append("روی نقشه ضربه بزن تا نقطه اضافه شود.")
+        } else {
+            sb.append("  •  ").append(distLabel(total))
+            if (n >= 2) {
+                var brg = measurePts[n - 2].bearingTo(measurePts[n - 1])
+                if (brg < 0.0) brg += 360.0
+                sb.append(Char(10)).append("جهت آخرین پاره‌خط: ")
+                    .append(String.format(fa, "%d", Math.round(brg).toInt())).append("°")
+            }
+            if (n >= 3) {
+                val direct = measurePts[0].distanceToAsDouble(measurePts[n - 1])
+                sb.append("  •  مستقیم: ").append(distLabel(direct))
+                sb.append(Char(10)).append("مساحت: ").append(areaLabel(polygonAreaM2(measurePts)))
+            }
+        }
+        measureInfo.text = sb.toString()
+        map.invalidate()
+    }
+
     private fun showPage(showMap: Boolean) {
         gaugePage.visibility = if (showMap) View.GONE else View.VISIBLE
         (modeButtons.firstOrNull()?.parent as? View)?.visibility = if (showMap) View.GONE else View.VISIBLE
@@ -758,6 +963,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         when {
+            measuring -> stopMeasure()
             navBanner.visibility == View.VISIBLE -> clearNav()
             viewingRide != null -> closeView()
             currentTab != 0 -> showTab(0)
