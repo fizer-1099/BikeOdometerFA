@@ -39,6 +39,10 @@
             android:name=".HudActivity"
             android:exported="false"/>
         <activity
+            android:name=".CompassActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+        <activity
             android:name=".HolderActivity"
             android:exported="false"/>
         <service

@@ -258,6 +258,7 @@ class MainActivity : Activity() {
         buildNavUi()
         buildMeasureUi()
         buildPointsUi()
+        buildCompassButton()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -1217,6 +1218,23 @@ class MainActivity : Activity() {
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, "اشتراک نقطه‌ها (GPX)"))
+    }
+
+    private fun buildCompassButton() {
+        val frame = mapPage as android.widget.FrameLayout
+        val b = Button(this)
+        b.text = "🧭 قطب‌نما"
+        b.textSize = 13f
+        b.minWidth = 0
+        b.minHeight = 0
+        b.setBackgroundResource(R.drawable.bg_tab)
+        b.setTextColor(col(R.color.tab_text))
+        b.setPadding(dp(12), 0, dp(12), 0)
+        b.setOnClickListener { startActivity(Intent(this, CompassActivity::class.java)) }
+        val lp = android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.setMargins(dp(12), dp(216), dp(12), 0)
+        frame.addView(b, lp)
     }
 
     private fun showPage(showMap: Boolean) {

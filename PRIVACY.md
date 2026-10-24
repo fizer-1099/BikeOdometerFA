@@ -28,6 +28,7 @@
 
 - **موقعیت مکانی دقیق و تقریبی:** برای ثبت مسیر و نمایش روی نقشه.
 - **سرویس پیش‌زمینه (نوع مکان) و اعلان‌ها:** تا ثبت مسیر با صفحه‌ی خاموش ادامه پیدا کند.
+- **حسگر جهت‌یاب (قطب‌نما):** برای نمایش جهت؛ نیازی به مجوز ندارد و داده‌ای از آن ارسال نمی‌شود.
 - **لرزش:** برای هشدار عبور از سقف مجاز سرعت.
 - **تشخیص فعالیت بدنی:** اختیاری است و فقط در حالت «پیاده‌روی» برای شمردن قدم‌ها از حسگر قدم‌شمار گوشی استفاده می‌شود. اگر مجوز را ندهی، قدم‌ها از روی مسافت تخمین زده می‌شوند.
 - **نمایش روی برنامه‌های دیگر:** اختیاری است و فقط اگر «نمایش شناور» را روشن کنی، برای نشان دادن سرعت روی بقیه‌ی برنامه‌ها استفاده می‌شود.
@@ -87,6 +88,7 @@
 
 - **Precise and approximate location:** to record rides and show your position on the map.
 - **Foreground service (location type) and notifications:** so recording can continue with the screen off.
+- **Orientation sensor (compass):** used to show heading; needs no permission and nothing from it is sent anywhere.
 - **Vibration:** for the speed limit alert.
 - **Physical activity recognition:** optional; used only in "Walking" mode to count steps with the phones step-counter sensor. If you deny it, steps are estimated from distance.
 - **Display over other apps:** optional; used only if you turn on "Floating display" to show your speed above other apps.
