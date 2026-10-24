@@ -83,7 +83,7 @@ object RideStore {
         val avgK = p.getFloat("average", 0f)
         val mode = p.getString("mode", "bike") ?: "bike"
         val steps = p.getInt("steps", 0)
-        p.edit().putBoolean("active", false).putBoolean("paused", false).putLong("elapsed", elapsed).putFloat("speed", 0f).apply()
+        p.edit().putBoolean("active", false).putBoolean("paused", false).putBoolean("auto_paused", false).putLong("elapsed", elapsed).putFloat("speed", 0f).apply()
 
         if (distance > 0.01f) {
             val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(start))
@@ -156,6 +156,8 @@ object RideStore {
         val start = p.getLong("start_ms", now)
         var pausedMs = p.getLong("paused_ms", 0L)
         if (p.getBoolean("paused", false)) pausedMs += now - p.getLong("pause_start", now)
+        pausedMs += p.getLong("auto_paused_ms", 0L)
+        if (p.getBoolean("auto_paused", false)) pausedMs += now - p.getLong("auto_pause_start", now)
         return ((now - start - pausedMs) / 1000L).coerceAtLeast(0L)
     }
 

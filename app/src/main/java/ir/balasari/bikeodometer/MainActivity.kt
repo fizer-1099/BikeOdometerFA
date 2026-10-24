@@ -94,7 +94,7 @@ class MainActivity : Activity() {
     private val routeLine = Polyline()
     private var marker: Marker? = null
     private var liveCallback: LocationCallback? = null
-    private val fused by lazy { LocationServices.getFusedLocationProviderClient(this) }
+    private val fused by lazy { SafeLocation(this) }
 
     private var currentTab = 0
     private var viewingRide: Ride? = null
@@ -581,11 +581,30 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
         nbLp.gravity = Gravity.BOTTOM
-        nbLp.setMargins(dp(12), 0, dp(12), dp(8))
+        nbLp.setMargins(dp(12), 0, dp(12), dp(20))
         frame.addView(navBanner, nbLp)
 
         navLine.outlinePaint.color = Color.rgb(245, 124, 0)
         navLine.outlinePaint.strokeWidth = 10f
+
+        // ذکر منبع نقشه (الزام مجوز OpenStreetMap)
+        val attr = TextView(this)
+        attr.text = "© OpenStreetMap contributors"
+        attr.textSize = 10f
+        attr.setTextColor(Color.rgb(40, 40, 40))
+        attr.setBackgroundColor(Color.argb(170, 255, 255, 255))
+        attr.setPadding(dp(4), dp(1), dp(4), dp(1))
+        attr.setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/copyright")))
+            } catch (_: Exception) {
+            }
+        }
+        val attrLp = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        attrLp.gravity = Gravity.BOTTOM or Gravity.END
+        frame.addView(attr, attrLp)
 
         // لمس طولانی روی نقشه = انتخاب مقصد
         map.overlays.add(
@@ -804,7 +823,7 @@ class MainActivity : Activity() {
         pauseButton.visibility = if (active) View.VISIBLE else View.GONE
         pauseButton.text = if (isPaused) "ادامه" else "مکث"
         if (active) {
-            statusText.text = if (isPaused) "⏸ مکث شده" else "● در حال ثبت"
+            statusText.text = if (isPaused) "⏸ مکث شده" else if (p.getBoolean("auto_paused", false)) "⏸ مکث خودکار" else "● در حال ثبت"
             statusText.setTextColor(col(if (isPaused) R.color.accent else R.color.ok))
         }
 
@@ -941,7 +960,7 @@ class MainActivity : Activity() {
                 val t1 = v.findViewById<TextView>(android.R.id.text1)
                 t1.text = Modes.byId(r.mode).emoji + " " + km + " " + Units.distWord(this@MainActivity) + "  •  " + dur
                 t1.setTextColor(col(R.color.text_primary))
-                var sub = r.stamp + (if (r.steps > 0) "  •  " + String.format(fa, "%d", r.steps) + " قدم" else "")
+                var sub = r.shamsi + (if (r.steps > 0) "  •  " + String.format(fa, "%d", r.steps) + " قدم" else "")
                 if (r.avgKmh > 0) sub += "  •  میانگین " + Units.speedText(this@MainActivity, r.avgKmh.toFloat())
                 if (r.maxKmh > 0) sub += " | حداکثر " + Units.speedText(this@MainActivity, r.maxKmh.toFloat())
                 val t2 = v.findViewById<TextView>(android.R.id.text2)
@@ -955,7 +974,7 @@ class MainActivity : Activity() {
 
     private fun showRideMenu(r: Ride) {
         dlg()
-            .setTitle(r.stamp)
+            .setTitle(r.shamsi)
             .setItems(arrayOf("نمایش مسیر روی نقشه", "اشتراک مسیر (GPX)", "حذف سفر")) { _, which ->
                 when (which) { 0 -> viewRide(r); 1 -> shareGpx(r); else -> confirmDelete(r) }
             }
@@ -965,7 +984,7 @@ class MainActivity : Activity() {
     private fun confirmDelete(r: Ride) {
         dlg()
             .setTitle("حذف سفر")
-            .setMessage("سفر ${r.stamp} حذف شود؟")
+            .setMessage("سفر ${r.shamsi} حذف شود؟")
             .setPositiveButton("حذف") { _, _ ->
                 RideStore.deleteRide(this, r.index)
                 refreshTrips()
@@ -983,7 +1002,7 @@ class MainActivity : Activity() {
         viewingRide = r
         followMe = false
         routeLine.setPoints(pts)
-        viewBannerText.text = "سفر " + r.stamp
+        viewBannerText.text = "سفر " + r.shamsi
         viewBanner.visibility = View.VISIBLE
         showTab(0)
         showPage(true)
@@ -1055,19 +1074,19 @@ class MainActivity : Activity() {
         val dUnit = Units.distUnit(this)
         val fastest = rides.maxByOrNull { it.maxKmh }
         if (fastest != null && fastest.maxKmh > 0) {
-            addRecord("🚀 بیشترین سرعت", Units.speedText(this, fastest.maxKmh.toFloat()) + " " + sUnit, fastest.stamp)
+            addRecord("🚀 بیشترین سرعت", Units.speedText(this, fastest.maxKmh.toFloat()) + " " + sUnit, fastest.shamsi)
         }
         val longest = rides.maxByOrNull { it.km }
         if (longest != null) {
-            addRecord("📏 طولانی‌ترین سفر", Units.distText(this, longest.km.toFloat()) + " " + dUnit, longest.stamp)
+            addRecord("📏 طولانی‌ترین سفر", Units.distText(this, longest.km.toFloat()) + " " + dUnit, longest.shamsi)
         }
         val longestTime = rides.maxByOrNull { it.elapsed }
         if (longestTime != null) {
-            addRecord("⏱ بیشترین زمان سواری", RideStore.formatDuration(longestTime.elapsed), longestTime.stamp)
+            addRecord("⏱ بیشترین زمان سواری", RideStore.formatDuration(longestTime.elapsed), longestTime.shamsi)
         }
         val bestAvg = rides.maxByOrNull { it.avgKmh }
         if (bestAvg != null && bestAvg.avgKmh > 0) {
-            addRecord("⚡ بهترین میانگین سرعت", Units.speedText(this, bestAvg.avgKmh.toFloat()) + " " + sUnit, bestAvg.stamp)
+            addRecord("⚡ بهترین میانگین سرعت", Units.speedText(this, bestAvg.avgKmh.toFloat()) + " " + sUnit, bestAvg.shamsi)
         }
         val totalKm = rides.sumOf { it.km }
         val totalSec = rides.sumOf { it.elapsed }
@@ -1149,6 +1168,21 @@ class MainActivity : Activity() {
         })
         settingsContainer.addView(theme)
 
+        // مکث خودکار
+        val ap = card()
+        ap.addView(tv("مکث خودکار", 14f, R.color.text_primary, true))
+        ap.addView(
+            tv(
+                "وقتی چند ثانیه ایستاده‌ای (مثلاً پشت چراغ قرمز)، زمان سفر شمرده نمی‌شود و با حرکت دوباره ادامه پیدا می‌کند.",
+                12f, R.color.text_secondary, false, 6
+            )
+        )
+        ap.addView(segmented(listOf("خاموش", "روشن"), if (s.getBoolean("auto_pause", false)) 1 else 0) { i ->
+            s.edit().putBoolean("auto_pause", i == 1).apply()
+            refreshSettings()
+        })
+        settingsContainer.addView(ap)
+
         // نمایش شناور
         val fl = card()
         fl.addView(tv("نمایش شناور", 14f, R.color.text_primary, true))
@@ -1180,6 +1214,7 @@ class MainActivity : Activity() {
         about.addView(tv("اف کیلومتر", 20f, R.color.accent, true))
         about.addView(tv("کیلومترشمار و ثبت مسیر؛ دوچرخه، پیاده‌روی، موتور و ماشین", 13f, R.color.text_secondary, false, 2))
         about.addView(tv("سازنده: نوید بلانیان", 15f, R.color.text_primary, true, 12))
+        about.addView(tv("نقشه: © OpenStreetMap contributors", 12f, R.color.text_secondary, false, 6))
         val ver = try {
             packageManager.getPackageInfo(packageName, 0).versionName
         } catch (_: Exception) {

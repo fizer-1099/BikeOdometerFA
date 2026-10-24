@@ -58,6 +58,7 @@ class HolderActivity : Activity() {
     private lateinit var maxV: TextView
     private lateinit var timeV: TextView
     private lateinit var rideButton: Button
+    private lateinit var pauseButton: Button
     private var uiActive: Boolean? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -172,7 +173,20 @@ class HolderActivity : Activity() {
         rideButton.setOnClickListener { onRideClick() }
         val btnLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64))
         btnLp.topMargin = dp(12)
-        inner.addView(rideButton, btnLp)
+        pauseButton = Button(this)
+        pauseButton.text = "مکث"
+        pauseButton.textSize = 18f
+        pauseButton.setTextColor(Color.WHITE)
+        pauseButton.background = rounded(panel, 16)
+        pauseButton.visibility = View.GONE
+        pauseButton.setOnClickListener { togglePause() }
+        val btnRow = LinearLayout(this)
+        btnRow.orientation = LinearLayout.HORIZONTAL
+        btnRow.addView(rideButton, LinearLayout.LayoutParams(0, dp(64), 2f))
+        val pLp = LinearLayout.LayoutParams(0, dp(64), 1f)
+        pLp.setMargins(dp(8), 0, 0, 0)
+        btnRow.addView(pauseButton, pLp)
+        inner.addView(btnRow, btnLp)
 
         setContentView(outer)
     }
@@ -192,6 +206,13 @@ class HolderActivity : Activity() {
             applyRideUi(active)
         }
         clockText.text = SimpleDateFormat("HH:mm:ss", fa).format(Date())
+        val heldPaused = active && p.getBoolean("paused", false)
+        val heldAuto = active && p.getBoolean("auto_paused", false)
+        pauseButton.visibility = if (active) View.VISIBLE else View.GONE
+        pauseButton.text = if (heldPaused) "ادامه" else "مکث"
+        if (active) {
+            statusText.text = if (heldPaused) "⏸ مکث" else if (heldAuto) "⏸ مکث خودکار" else "● در حال ثبت"
+        }
 
         val speed = if (active) p.getFloat("speed", 0f) else 0f
         speedText.text = Units.speedValue(this, speed).toInt().toString()
@@ -208,6 +229,17 @@ class HolderActivity : Activity() {
         avgV.text = Units.speedText(this, p.getFloat("average", 0f))
         maxV.text = Units.speedText(this, p.getFloat("max", 0f))
         timeV.text = RideStore.formatDuration(elapsed)
+    }
+
+    private fun togglePause() {
+        val p = RideStore.state(this)
+        if (!p.getBoolean("active", false) || !isServiceRunning()) return
+        val paused = p.getBoolean("paused", false)
+        startService(
+            Intent(this, TrackingService::class.java)
+                .setAction(if (paused) TrackingService.ACTION_RESUME else TrackingService.ACTION_PAUSE)
+        )
+        handler.postDelayed({ refresh() }, 300L)
     }
 
     private fun onRideClick() {

@@ -42,7 +42,7 @@ class TrackingService : Service(), SensorEventListener {
         private const val MAX_SPEED_MS = 30.0    // حدود ۱۰۸ km/h؛ بیشتر از این پرش GPS است
     }
 
-    private lateinit var fused: FusedLocationProviderClient
+    private lateinit var fused: SafeLocation
     private lateinit var callback: LocationCallback
     private var tracking = false
 
@@ -55,6 +55,8 @@ class TrackingService : Service(), SensorEventListener {
     private var lastAlertMs = 0L
     private var mode = "bike"
     private var paused = false
+    private var autoPaused = false
+    private var stillSince = 0L
     private var sensorManager: SensorManager? = null
     private var stepSensorActive = false
     private var stepBaseline = -1f
@@ -64,7 +66,7 @@ class TrackingService : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
-        fused = LocationServices.getFusedLocationProviderClient(this)
+        fused = SafeLocation(this)
         createChannel()
         tone = try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100) } catch (_: Exception) { null }
         callback = object : LocationCallback() {
@@ -105,7 +107,7 @@ class TrackingService : Service(), SensorEventListener {
         // وضعیت را از prefs بخوان تا «ادامه‌ی سفر» بعد از kill شدن هم کار کند.
         val p = RideStore.state(this)
         if (!p.contains("start_ms")) p.edit().putLong("start_ms", System.currentTimeMillis()).apply()
-        p.edit().putBoolean("active", true).putBoolean("paused", false).apply()
+        p.edit().putBoolean("active", true).putBoolean("paused", false).putBoolean("auto_paused", false).apply()
         distance = p.getFloat("distance", 0f).toDouble()
         maxSpeed = p.getFloat("max", 0f).toDouble()
         movingSec = p.getLong("moving", 0L).toDouble()
@@ -135,6 +137,7 @@ class TrackingService : Service(), SensorEventListener {
         var speedKmh = if (loc.hasSpeed()) loc.speed * 3.6 else 0.0
         if (speedKmh < 1.5) speedKmh = 0.0
         val stationary = loc.hasSpeed() && loc.speed < 0.5f
+        updateAutoPause(stationary, now)
 
         val prev = last
         if (prev == null) {
@@ -270,6 +273,7 @@ class TrackingService : Service(), SensorEventListener {
         if (!tracking || paused) return
         try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
         stopStepCounting()
+        endAutoPause(System.currentTimeMillis())
         paused = true
         last = null
         outliers = 0
@@ -304,6 +308,37 @@ class TrackingService : Service(), SensorEventListener {
         }
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification("در حال ثبت مسیر"))
+    }
+
+    // ---- مکث خودکار (وقتی چند ثانیه ایستاده‌ای)
+    private fun updateAutoPause(still: Boolean, now: Long) {
+        val on = RideStore.settings(this).getBoolean("auto_pause", false)
+        if (!on) {
+            if (autoPaused) endAutoPause(now)
+            stillSince = 0L
+            return
+        }
+        if (still) {
+            if (stillSince == 0L) stillSince = now
+            if (!autoPaused && now - stillSince >= 8000L) {
+                autoPaused = true
+                RideStore.state(this).edit()
+                    .putBoolean("auto_paused", true)
+                    .putLong("auto_pause_start", stillSince)
+                    .apply()
+            }
+        } else {
+            stillSince = 0L
+            if (autoPaused) endAutoPause(now)
+        }
+    }
+
+    private fun endAutoPause(now: Long) {
+        if (!autoPaused) return
+        autoPaused = false
+        val p = RideStore.state(this)
+        val total = p.getLong("auto_paused_ms", 0L) + (now - p.getLong("auto_pause_start", now))
+        p.edit().putBoolean("auto_paused", false).putLong("auto_paused_ms", total).apply()
     }
 
     private fun stopTracking() {
