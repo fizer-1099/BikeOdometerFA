@@ -14,7 +14,7 @@
 
 **۱. موقعیت مکانی دقیق (GPS).** وقتی سفر را شروع می‌کنی، برنامه موقعیتت را برای محاسبه‌ی مسافت، سرعت و مسیر می‌خواند. این کار با صفحه‌ی خاموش هم ادامه دارد و یک اعلان دائمی نشان داده می‌شود. وقتی برنامه باز است، موقعیت برای نمایش روی نقشه هم خوانده می‌شود. موقعیت از طریق سرویس موقعیت‌یابی Google Play Services گرفته می‌شود که توسط گوگل ارائه می‌شود و تابع سیاست حریم خصوصی گوگل است. روی گوشی‌هایی که این سرویس را ندارند، از سرویس موقعیت‌یابی خود اندروید استفاده می‌شود.
 
-**۲. اطلاعات سفرها.** نوع سفر (دوچرخه، پیاده‌روی، موتور یا ماشین)، تعداد قدم‌ها (در پیاده‌روی)، تاریخ، مسافت، مدت، سرعت میانگین و حداکثر، و نقاط مسیر (همراه با زمان) در حافظه‌ی داخلی برنامه روی گوشی ذخیره می‌شود.
+**۲. اطلاعات سفرها.** نوع سفر (دوچرخه، پیاده‌روی، موتور یا ماشین)، تعداد قدم‌ها (در پیاده‌روی)، تاریخ، مسافت، مدت، سرعت میانگین و حداکثر، و نقاط مسیر (همراه با زمان)، و نقطه‌های ذخیره‌شده‌ی خودت (نام، یادداشت، مختصات) در حافظه‌ی داخلی برنامه روی گوشی ذخیره می‌شود.
 
 **۳. تنظیمات.** واحد (کیلومتر یا مایل)، پوسته، سقف مجاز سرعت و محل پنجره‌ی شناور روی گوشی ذخیره می‌شود.
 
@@ -22,7 +22,7 @@
 
 **۵. جستجو و مسیریابی (اختیاری).** وقتی مکانی را جستجو می‌کنی، متن جستجو و یک ناحیه‌ی تقریبی اطراف موقعیتت به سرویس Nominatim (OpenStreetMap) فرستاده می‌شود. وقتی مسیر می‌گیری، مختصات مبدأ (موقعیت فعلی‌ات) و مقصد به سرور مسیریابی OpenStreetMap (routing.openstreetmap.de) فرستاده می‌شود. این کارها فقط با اقدام خودت انجام می‌شود و تابع سیاست آن سرویس‌هاست.
 
-**۶. خروجی‌ها.** فایل CSV یا GPX فقط وقتی تو درخواست کنی ساخته می‌شود و با برنامه‌ای که خودت انتخاب می‌کنی به اشتراک گذاشته می‌شود. نسخه‌ی موقت فایل در حافظه‌ی پنهان (cache) برنامه می‌ماند.
+**۶. خروجی‌ها.** فایل CSV، GPX یا پشتیبان ZIP فقط وقتی تو درخواست کنی ساخته می‌شود و با برنامه‌ای که خودت انتخاب می‌کنی به اشتراک گذاشته می‌شود. نسخه‌ی موقت فایل در حافظه‌ی پنهان (cache) برنامه می‌ماند.
 
 ## مجوزها
 
@@ -73,7 +73,7 @@
 
 **1. Precise location (GPS).** When you start a ride, the app reads your location to compute distance, speed and route. This continues while the screen is off, with a persistent notification. While the app is open it also reads your location to show it on the map. Location is obtained through Google Play services location, or through the built-in Android location service on devices without it. The Google service is provided by Google and subject to Google's privacy policy.
 
-**2. Ride records.** Ride type (bike, walking, motorcycle or car), step count (walking), date, distance, duration, average and maximum speed, and route points (with timestamps) are stored in the app's private storage on your phone.
+**2. Ride records.** Ride type (bike, walking, motorcycle or car), step count (walking), date, distance, duration, average and maximum speed, and route points (with timestamps) and saved waypoints (name, note, coordinates) are stored in the app's private storage on your phone.
 
 **3. Settings.** Units (km or miles), theme, speed limit and the floating window position are stored on your phone.
 
@@ -81,7 +81,7 @@
 
 **5. Search and routing (optional).** When you search for a place, your search text and an approximate area around your location are sent to the Nominatim service (OpenStreetMap). When you request a route, the start (your current location) and destination coordinates are sent to the OpenStreetMap routing server (routing.openstreetmap.de). This happens only when you take the action and is governed by those services policies.
 
-**6. Exports.** CSV or GPX files are created only when you ask for them and are shared with the app you choose. A temporary copy stays in the app's cache.
+**6. Exports.** CSV, GPX or backup ZIP files are created only when you ask for them and are shared with the app you choose. A temporary copy stays in the app's cache.
 
 ## Permissions
 

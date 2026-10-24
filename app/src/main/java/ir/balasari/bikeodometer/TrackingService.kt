@@ -18,6 +18,8 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.IBinder
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.core.app.NotificationCompat
@@ -57,6 +59,10 @@ class TrackingService : Service(), SensorEventListener {
     private var paused = false
     private var autoPaused = false
     private var stillSince = 0L
+    private var announced = 0
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var ttsFa = false
     private var sensorManager: SensorManager? = null
     private var stepSensorActive = false
     private var stepBaseline = -1f
@@ -113,6 +119,7 @@ class TrackingService : Service(), SensorEventListener {
         movingSec = p.getLong("moving", 0L).toDouble()
         points = p.getInt("points", 0)
         mode = p.getString("mode", "bike") ?: "bike"
+        announced = (distance * Units.factor(this)).toInt()
         last = null
         outliers = 0
 
@@ -188,6 +195,7 @@ class TrackingService : Service(), SensorEventListener {
             .apply()
 
         checkLimit(speedKmh, now)
+        checkAnnounce()
         FloatingOverlay.update(this, speedKmh)
 
         val text = "مسافت: " + Units.distText(this, distance.toFloat()) + " " + Units.distUnit(this) + " | سرعت: " + Units.speedText(this, speedKmh.toFloat()) + " " + Units.speedUnit(this)
@@ -240,6 +248,36 @@ class TrackingService : Service(), SensorEventListener {
         if (!m.hasSteps) return 0
         if (stepSensorActive) return stepsAtStart + sensorSteps
         return if (m.strideM > 0.0) (distance * 1000.0 / m.strideM).toInt() else 0
+    }
+
+    // ---- اعلام صوتی هر کیلومتر
+    private fun ensureTts() {
+        if (tts != null) return
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                val r = tts?.isLanguageAvailable(Locale("fa")) ?: TextToSpeech.LANG_NOT_SUPPORTED
+                ttsFa = r >= TextToSpeech.LANG_AVAILABLE
+                tts?.setLanguage(if (ttsFa) Locale("fa") else Locale.ENGLISH)
+                ttsReady = true
+            }
+        }
+    }
+
+    private fun checkAnnounce() {
+        if (!RideStore.settings(this).getBoolean("voice_km", false)) return
+        val units = (distance * Units.factor(this)).toInt()
+        if (units <= announced) return
+        announced = units
+        ensureTts()
+        if (!ttsReady) return
+        val miles = Units.isMiles(this)
+        val avg = Math.round(RideStore.state(this).getFloat("average", 0f) * Units.factor(this)).toInt()
+        val msg = if (ttsFa) {
+            units.toString() + (if (miles) " مایل" else " کیلومتر") + " طی شد. میانگین سرعت " + avg
+        } else {
+            units.toString() + (if (miles) " miles" else " kilometers") + ". Average speed " + avg
+        }
+        tts?.speak(msg, TextToSpeech.QUEUE_ADD, null, "km" + units)
     }
 
     private fun addPoint(loc: Location) {
@@ -395,6 +433,7 @@ class TrackingService : Service(), SensorEventListener {
         try { fused.removeLocationUpdates(callback) } catch (_: Exception) {}
         try { tone?.release() } catch (_: Exception) {}
         try { stopStepCounting() } catch (_: Exception) {}
+        try { tts?.shutdown() } catch (_: Exception) {}
         FloatingOverlay.hide(this)
         super.onDestroy()
     }

@@ -257,6 +257,7 @@ class MainActivity : Activity() {
         buildPauseButton()
         buildNavUi()
         buildMeasureUi()
+        buildPointsUi()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -584,6 +585,22 @@ class MainActivity : Activity() {
         clp.setMargins(dp(8), 0, 0, 0)
         btns.addView(ext, elp)
         btns.addView(clr, clp)
+        val sv = Button(this)
+        sv.text = "ذخیره"
+        sv.textSize = 12f
+        sv.minHeight = 0
+        sv.setBackgroundResource(R.drawable.bg_tab)
+        sv.setTextColor(col(R.color.tab_text))
+        sv.setOnClickListener {
+            promptWaypoint("ذخیره‌ی نقطه", destName.take(40), "") { n, t ->
+                Waypoints.add(this, n, t, destLat, destLon)
+                refreshWaypointMarkers()
+                toast("نقطه ذخیره شد.")
+            }
+        }
+        val svLp = LinearLayout.LayoutParams(0, dp(36), 1f)
+        svLp.setMargins(dp(8), 0, 0, 0)
+        btns.addView(sv, svLp)
         navBanner.addView(navInfo)
         navBanner.addView(btns)
         val nbLp = android.widget.FrameLayout.LayoutParams(
@@ -627,7 +644,7 @@ class MainActivity : Activity() {
                     return false
                 }
                 override fun longPressHelper(p: GeoPoint?): Boolean {
-                    if (p != null && !measuring) setDestination(p.latitude, p.longitude, "نقطه‌ی انتخاب‌شده")
+                    if (p != null && !measuring) setDestination(p.latitude, p.longitude, "نقطه‌ی انتخاب‌شده  " + Coords.decimal(p.latitude, p.longitude))
                     return true
                 }
             })
@@ -672,6 +689,11 @@ class MainActivity : Activity() {
         destLat = lat
         destLon = lon
         destName = name
+        RideStore.settings(this).edit()
+            .putString("dest_lat", lat.toString())
+            .putString("dest_lon", lon.toString())
+            .putString("dest_name", name)
+            .apply()
         destMarker?.let { map.overlays.remove(it) }
         val m = Marker(map)
         m.position = GeoPoint(lat, lon)
@@ -740,6 +762,7 @@ class MainActivity : Activity() {
     private fun clearNav() {
         destMarker?.let { map.overlays.remove(it) }
         destMarker = null
+        RideStore.settings(this).edit().remove("dest_lat").remove("dest_lon").remove("dest_name").apply()
         map.overlays.remove(navLine)
         navBanner.visibility = View.GONE
         map.invalidate()
@@ -944,6 +967,256 @@ class MainActivity : Activity() {
         }
         measureInfo.text = sb.toString()
         map.invalidate()
+    }
+
+    // ---- پشتیبان و بازیابی
+    private fun shareBackup() {
+        val f = Backup.create(this)
+        if (f == null) {
+            toast("چیزی برای پشتیبان‌گیری نیست یا ساخت فایل ناموفق بود.")
+            return
+        }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, packageName + ".provider", f)
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("application/zip")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "ذخیره‌ی پشتیبان"))
+    }
+
+    private fun pickBackup() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = "*/*"
+        try {
+            startActivityForResult(i, 520)
+        } catch (_: Exception) {
+            toast("برنامه‌ی انتخاب فایل پیدا نشد.")
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 520 || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        val n = Backup.restore(this, uri)
+        when {
+            n < 0 -> toast("فایل پشتیبان معتبر نبود.")
+            n == 0 -> toast("مورد تازه‌ای در فایل نبود.")
+            else -> toast(String.format(fa, "%d", n) + " مورد (سفر یا نقطه) بازیابی شد.")
+        }
+        if (currentTab == 3) refreshSettings()
+        if (currentTab == 1) refreshTrips()
+    }
+
+    // ---- نمودار مسافت ۷ روز اخیر (در تب رکوردها)
+    private fun startOfDay(t: Long): Long {
+        val c = java.util.Calendar.getInstance()
+        c.timeInMillis = t
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        c.set(java.util.Calendar.MINUTE, 0)
+        c.set(java.util.Calendar.SECOND, 0)
+        c.set(java.util.Calendar.MILLISECOND, 0)
+        return c.timeInMillis
+    }
+
+    private fun addWeekChart(rides: List<Ride>) {
+        val dayMs = 86400000.0
+        val today = startOfDay(System.currentTimeMillis())
+        val sums = DoubleArray(7)
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+        for (r in rides) {
+            val t = if (r.startMs > 0L) {
+                r.startMs
+            } else {
+                try { fmt.parse(r.stamp)?.time ?: 0L } catch (_: Exception) { 0L }
+            }
+            if (t <= 0L) continue
+            val ago = Math.round((today - startOfDay(t)) / dayMs).toInt()
+            if (ago in 0..6) sums[ago] += r.km * Units.factor(this)
+        }
+        val names = arrayOf("", "ی", "د", "س", "چ", "پ", "ج", "ش")
+        val labels = Array(7) { i ->
+            val c = java.util.Calendar.getInstance()
+            c.timeInMillis = today - (i * 86400000L)
+            names[c.get(java.util.Calendar.DAY_OF_WEEK)]
+        }
+        val valueLabels = Array(7) { i -> if (sums[i] > 0.0) String.format(fa, "%.1f", sums[i]) else "" }
+
+        val chart = BarChartView(this)
+        chart.values = sums
+        chart.labels = labels
+        chart.valueLabels = valueLabels
+
+        val c = card()
+        c.addView(tv("مسافت ۷ روز اخیر (" + Units.distUnit(this) + ")", 13f, R.color.text_secondary))
+        c.addView(chart)
+        recordsContainer.addView(c)
+    }
+
+    // ---- نقطه‌های ذخیره‌شده (Waypoint)
+    private val wpMarkers = ArrayList<Marker>()
+
+    private fun buildPointsUi() {
+        val frame = mapPage as android.widget.FrameLayout
+        val b = Button(this)
+        b.text = "📍 نقطه‌ها"
+        b.textSize = 13f
+        b.minWidth = 0
+        b.minHeight = 0
+        b.setBackgroundResource(R.drawable.bg_tab)
+        b.setTextColor(col(R.color.tab_text))
+        b.setPadding(dp(12), 0, dp(12), 0)
+        b.setOnClickListener { showWaypoints() }
+        val lp = android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.setMargins(dp(12), dp(168), dp(12), 0)
+        frame.addView(b, lp)
+        refreshWaypointMarkers()
+    }
+
+    private fun refreshWaypointMarkers() {
+        for (m in wpMarkers) map.overlays.remove(m)
+        wpMarkers.clear()
+        for (w in Waypoints.load(this)) {
+            val m = Marker(map)
+            m.position = GeoPoint(w.lat, w.lon)
+            m.title = w.name
+            if (w.note.isNotBlank()) m.snippet = w.note
+            m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            val dot = android.graphics.drawable.GradientDrawable()
+            dot.shape = android.graphics.drawable.GradientDrawable.OVAL
+            dot.setColor(Color.rgb(245, 124, 0))
+            dot.setStroke(dp(2), Color.WHITE)
+            dot.setSize(dp(18), dp(18))
+            m.icon = dot
+            map.overlays.add(m)
+            wpMarkers.add(m)
+        }
+        map.invalidate()
+    }
+
+    private fun showWaypoints() {
+        val me = marker?.position
+        val all = Waypoints.load(this)
+        val list = if (me != null) {
+            all.sortedBy { me.distanceToAsDouble(GeoPoint(it.lat, it.lon)) }
+        } else {
+            all.reversed()
+        }
+        val items = list.map { w ->
+            var s = w.name
+            if (me != null) s += "  •  " + distLabel(me.distanceToAsDouble(GeoPoint(w.lat, w.lon)))
+            s
+        }.toTypedArray()
+        val b = dlg().setTitle("نقطه‌های ذخیره‌شده (" + String.format(fa, "%d", list.size) + ")")
+        if (list.isEmpty()) {
+            b.setMessage("هنوز نقطه‌ای ذخیره نشده. با «ذخیره‌ی مکان من» شروع کن، یا روی نقشه لمس طولانی بزن و «ذخیره» را انتخاب کن.")
+        } else {
+            b.setItems(items) { _, i -> showWaypointMenu(list[i]) }
+        }
+        b.setPositiveButton("ذخیره‌ی مکان من") { _, _ -> saveMyPosition() }
+        b.setNeutralButton("اشتراک GPX") { _, _ -> shareWaypointsGpx() }
+        b.setNegativeButton("بستن", null)
+        b.show()
+    }
+
+    private fun saveMyPosition() {
+        val me = marker?.position
+        if (me == null) {
+            toast("موقعیتت هنوز پیدا نشده.")
+            return
+        }
+        val n = Waypoints.load(this).size + 1
+        promptWaypoint("ذخیره‌ی مکان من", "نقطه " + n, "") { name, note ->
+            Waypoints.add(this, name, note, me.latitude, me.longitude)
+            refreshWaypointMarkers()
+            toast("نقطه ذخیره شد.")
+        }
+    }
+
+    private fun promptWaypoint(title: String, name0: String, note0: String, onSave: (String, String) -> Unit) {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(20), dp(8), dp(20), 0)
+        val n = android.widget.EditText(this)
+        n.setText(name0)
+        n.hint = "نام"
+        n.setSingleLine(true)
+        n.setTextColor(col(R.color.text_primary))
+        n.setHintTextColor(col(R.color.text_secondary))
+        val t = android.widget.EditText(this)
+        t.setText(note0)
+        t.hint = "یادداشت (اختیاری)"
+        t.setTextColor(col(R.color.text_primary))
+        t.setHintTextColor(col(R.color.text_secondary))
+        box.addView(n)
+        box.addView(t)
+        dlg()
+            .setTitle(title)
+            .setView(box)
+            .setPositiveButton("ذخیره") { _, _ ->
+                val name = n.text.toString().trim().ifEmpty { name0 }
+                onSave(name, t.text.toString().trim())
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun showWaypointMenu(w: Waypoints.Wp) {
+        dlg()
+            .setTitle(w.name)
+            .setItems(arrayOf("نمایش روی نقشه", "مسیر تا اینجا", "مختصات و اشتراک", "ویرایش", "حذف")) { _, which ->
+                when (which) {
+                    0 -> {
+                        followMe = false
+                        map.controller.setZoom(17.0)
+                        map.controller.animateTo(GeoPoint(w.lat, w.lon))
+                    }
+                    1 -> setDestination(w.lat, w.lon, w.name)
+                    2 -> shareWaypointText(w)
+                    3 -> promptWaypoint("ویرایش نقطه", w.name, w.note) { name, note ->
+                        Waypoints.update(this, w.copy(name = name, note = note))
+                        refreshWaypointMarkers()
+                    }
+                    else -> dlg()
+                        .setTitle("حذف نقطه")
+                        .setMessage("«" + w.name + "» حذف شود؟")
+                        .setPositiveButton("حذف") { _, _ ->
+                            Waypoints.delete(this, w.id)
+                            refreshWaypointMarkers()
+                        }
+                        .setNegativeButton("انصراف", null)
+                        .show()
+                }
+            }
+            .show()
+    }
+
+    private fun shareWaypointText(w: Waypoints.Wp) {
+        val nl = Char(10).toString()
+        val text = w.name + nl + Coords.decimal(w.lat, w.lon) + nl + Coords.dms(w.lat, w.lon) +
+            nl + "UTM: " + Coords.utm(w.lat, w.lon) + nl + Coords.link(w.lat, w.lon)
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        startActivity(Intent.createChooser(send, "اشتراک مختصات"))
+    }
+
+    private fun shareWaypointsGpx() {
+        val list = Waypoints.load(this)
+        if (list.isEmpty()) {
+            toast("نقطه‌ای برای اشتراک نیست.")
+            return
+        }
+        val uri = FileShare.createUri(this, "waypoints.gpx", Waypoints.toGpx(list), false)
+        if (uri == null) {
+            toast("ساخت فایل ناموفق بود.")
+            return
+        }
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("application/gpx+xml")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "اشتراک نقطه‌ها (GPX)"))
     }
 
     private fun showPage(showMap: Boolean) {
@@ -1276,6 +1549,7 @@ class MainActivity : Activity() {
             addRecord("هنوز رکوردی ثبت نشده", "—", "اولین سفرت رو شروع کن")
             return
         }
+        addWeekChart(rides)
         val sUnit = Units.speedUnit(this)
         val dUnit = Units.distUnit(this)
         val fastest = rides.maxByOrNull { it.maxKmh }
@@ -1374,6 +1648,21 @@ class MainActivity : Activity() {
         })
         settingsContainer.addView(theme)
 
+        // اعلام صوتی
+        val vk = card()
+        vk.addView(tv("اعلام صوتی مسافت", 14f, R.color.text_primary, true))
+        vk.addView(
+            tv(
+                "با هر کیلومتر (یا مایل) طی‌شده، مسافت و میانگین سرعت با صدا اعلام می‌شود. اگر گوشی صدای فارسی نداشته باشد، انگلیسی می‌خواند.",
+                12f, R.color.text_secondary, false, 6
+            )
+        )
+        vk.addView(segmented(listOf("خاموش", "روشن"), if (s.getBoolean("voice_km", false)) 1 else 0) { i ->
+            s.edit().putBoolean("voice_km", i == 1).apply()
+            refreshSettings()
+        })
+        settingsContainer.addView(vk)
+
         // مکث خودکار
         val ap = card()
         ap.addView(tv("مکث خودکار", 14f, R.color.text_primary, true))
@@ -1414,6 +1703,20 @@ class MainActivity : Activity() {
         )
         bat.addView(segmented(listOf("باز کردن اطلاعات برنامه"), -1) { openBatterySettings() })
         settingsContainer.addView(bat)
+
+        // پشتیبان و بازیابی
+        val bk = card()
+        bk.addView(tv("پشتیبان و بازیابی", 14f, R.color.text_primary, true))
+        bk.addView(
+            tv(
+                "همه‌ی سفرها و مسیرها را در یک فایل ZIP ذخیره کن (مثلاً در تلگرام) و بعداً یا روی گوشی دیگر برگردان. بازیابی، سفرهای تازه را اضافه می‌کند و چیزی را پاک نمی‌کند.",
+                12f, R.color.text_secondary, false, 6
+            )
+        )
+        bk.addView(segmented(listOf("ساخت پشتیبان", "بازیابی از فایل"), -1) { i ->
+            if (i == 0) shareBackup() else pickBackup()
+        })
+        settingsContainer.addView(bk)
 
         // درباره
         val about = card()
