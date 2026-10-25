@@ -280,8 +280,14 @@ class TrackingService : Service(), SensorEventListener {
         tts?.speak(msg, TextToSpeech.QUEUE_ADD, null, "km" + units)
     }
 
+    /** ارتفاع از سطح دریا (اندروید ۱۴ به بالا) یا ارتفاع GPS؛ NaN اگر نبود. */
+    private fun altOf(loc: Location): Double =
+        if (Build.VERSION.SDK_INT >= 34 && loc.hasMslAltitude()) loc.mslAltitudeMeters
+        else if (loc.hasAltitude()) loc.altitude
+        else Double.NaN
+
     private fun addPoint(loc: Location) {
-        RouteLog.append(this, loc.latitude, loc.longitude, loc.time)
+        RouteLog.append(this, loc.latitude, loc.longitude, loc.time, altOf(loc))
         points++
     }
 

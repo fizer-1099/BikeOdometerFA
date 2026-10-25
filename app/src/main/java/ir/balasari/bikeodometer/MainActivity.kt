@@ -191,6 +191,7 @@ class MainActivity : Activity() {
 
         // نقشه
         map.setTileSource(TileSourceFactory.MAPNIK)
+        applyMapSource()
         map.setMultiTouchControls(true)
         map.controller.setZoom(18.0)
         map.controller.setCenter(GeoPoint(35.6892, 51.3890))
@@ -259,6 +260,7 @@ class MainActivity : Activity() {
         buildMeasureUi()
         buildPointsUi()
         buildCompassButton()
+        buildTracksUi()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -998,6 +1000,14 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 522) {
+            if (resultCode == RESULT_OK) data?.data?.let { importMapFile(it) }
+            return
+        }
+        if (requestCode == 521) {
+            if (resultCode == RESULT_OK) data?.data?.let { importTrackFile(it) }
+            return
+        }
         if (requestCode != 520 || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         val n = Backup.restore(this, uri)
@@ -1237,6 +1247,382 @@ class MainActivity : Activity() {
         frame.addView(b, lp)
     }
 
+    // ---- مسیرهای واردشده (GPX/KML) و نمودار ارتفاع
+    private val trackLine = Polyline()
+    private val trackMarkers = ArrayList<Marker>()
+
+    private fun buildTracksUi() {
+        val frame = mapPage as android.widget.FrameLayout
+        val b = Button(this)
+        b.text = "🗺 مسیرها"
+        b.textSize = 13f
+        b.minWidth = 0
+        b.minHeight = 0
+        b.setBackgroundResource(R.drawable.bg_tab)
+        b.setTextColor(col(R.color.tab_text))
+        b.setPadding(dp(12), 0, dp(12), 0)
+        b.setOnClickListener { showTracks() }
+        val lp = android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.setMargins(dp(12), dp(264), dp(12), 0)
+        frame.addView(b, lp)
+        trackLine.outlinePaint.color = Color.rgb(0, 150, 136)
+        trackLine.outlinePaint.strokeWidth = 9f
+    }
+
+    private fun showTracks() {
+        val list = Tracks.list(this)
+        val b = dlg().setTitle("مسیرها (" + String.format(fa, "%d", list.size) + ")")
+        if (list.isEmpty()) {
+            b.setMessage("هنوز مسیری وارد نشده. فایل GPX یا KML خودت را وارد کن.")
+        } else {
+            val items = list.map { m ->
+                var s = m.name + "  •  " + distLabel(m.km * 1000.0)
+                if (m.ascent > 0) s += "  •  ↑" + String.format(fa, "%d", Math.round(m.ascent).toInt()) + " م"
+                s
+            }.toTypedArray()
+            b.setItems(items) { _, i -> showTrackMenu(list[i]) }
+        }
+        b.setPositiveButton("وارد کردن فایل") { _, _ -> pickTrackFile() }
+        b.setNeutralButton("پنهان کردن مسیر") { _, _ -> hideTrack() }
+        b.setNegativeButton("بستن", null)
+        b.show()
+    }
+
+    private fun showTrackMenu(m: Tracks.Meta) {
+        dlg()
+            .setTitle(m.name)
+            .setItems(arrayOf("نمایش روی نقشه", "نمودار ارتفاع", "رفتن به ابتدای مسیر", "اشتراک GPX", "حذف")) { _, which ->
+                when (which) {
+                    0 -> showTrackOnMap(m)
+                    1 -> showElevation(m.name, Tracks.load(this, m.id))
+                    2 -> {
+                        val first = Tracks.load(this, m.id).firstOrNull()
+                        if (first != null) setDestination(first.lat, first.lon, m.name + " (ابتدا)")
+                    }
+                    3 -> {
+                        val gpx = RouteLog.buildGpx(m.name, Tracks.lines(this, m.id))
+                        val uri = FileShare.createUri(this, "track_" + m.id + ".gpx", gpx, false)
+                        if (uri == null) {
+                            toast("ساخت فایل ناموفق بود.")
+                        } else {
+                            val send = Intent(Intent.ACTION_SEND)
+                                .setType("application/gpx+xml")
+                                .putExtra(Intent.EXTRA_STREAM, uri)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            startActivity(Intent.createChooser(send, "اشتراک مسیر"))
+                        }
+                    }
+                    else -> dlg()
+                        .setTitle("حذف مسیر")
+                        .setMessage("«" + m.name + "» حذف شود؟")
+                        .setPositiveButton("حذف") { _, _ ->
+                            Tracks.delete(this, m.id)
+                            hideTrack()
+                        }
+                        .setNegativeButton("انصراف", null)
+                        .show()
+                }
+            }
+            .show()
+    }
+
+    private fun trackDot(color: Int): android.graphics.drawable.GradientDrawable {
+        val dot = android.graphics.drawable.GradientDrawable()
+        dot.shape = android.graphics.drawable.GradientDrawable.OVAL
+        dot.setColor(color)
+        dot.setStroke(dp(2), Color.WHITE)
+        dot.setSize(dp(18), dp(18))
+        return dot
+    }
+
+    private fun showTrackOnMap(m: Tracks.Meta) {
+        val pts = Tracks.load(this, m.id)
+        if (pts.size < 2) {
+            toast("مسیر خالی است.")
+            return
+        }
+        hideTrack()
+        val step = Math.max(1, pts.size / 3000)
+        val gp = ArrayList<GeoPoint>()
+        var i = 0
+        while (i < pts.size) {
+            gp.add(GeoPoint(pts[i].lat, pts[i].lon))
+            i += step
+        }
+        gp.add(GeoPoint(pts[pts.size - 1].lat, pts[pts.size - 1].lon))
+        trackLine.setPoints(gp)
+        map.overlays.add(trackLine)
+        for ((k, color) in listOf(0 to Color.rgb(46, 125, 50), 1 to Color.rgb(211, 47, 47))) {
+            val p = if (k == 0) pts.first() else pts.last()
+            val mk = Marker(map)
+            mk.position = GeoPoint(p.lat, p.lon)
+            mk.title = m.name + (if (k == 0) " (ابتدا)" else " (انتها)")
+            mk.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            mk.icon = trackDot(color)
+            map.overlays.add(mk)
+            trackMarkers.add(mk)
+        }
+        followMe = false
+        map.post {
+            try {
+                map.zoomToBoundingBox(BoundingBox.fromGeoPoints(gp), true, 120)
+            } catch (_: Exception) {
+            }
+            map.invalidate()
+        }
+    }
+
+    private fun hideTrack() {
+        map.overlays.remove(trackLine)
+        for (mk in trackMarkers) map.overlays.remove(mk)
+        trackMarkers.clear()
+        map.invalidate()
+    }
+
+    private fun pickTrackFile() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = "*/*"
+        try {
+            startActivityForResult(i, 521)
+        } catch (_: Exception) {
+            toast("برنامه‌ی انتخاب فایل پیدا نشد.")
+        }
+    }
+
+    private fun displayName(uri: Uri): String {
+        try {
+            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) return c.getString(0) ?: "مسیر"
+            }
+        } catch (_: Exception) {
+        }
+        return "مسیر"
+    }
+
+    private fun importTrackFile(uri: Uri) {
+        val fileName = displayName(uri).substringBeforeLast(".")
+        toast("در حال خواندن فایل…")
+        Thread {
+            val parsed = try {
+                contentResolver.openInputStream(uri)?.use { TrackFile.parse(it) }
+            } catch (_: Exception) {
+                null
+            }
+            runOnUiThread { onTrackParsed(parsed, fileName) }
+        }.start()
+    }
+
+    private fun onTrackParsed(parsed: TrackFile.Parsed?, fileName: String) {
+        if (parsed == null || (parsed.tracks.isEmpty() && parsed.waypoints.isEmpty())) {
+            toast("فایل معتبر GPX یا KML نبود.")
+            return
+        }
+        var idx = 0
+        for (t in parsed.tracks) {
+            idx++
+            val name = if (t.name.isNotBlank()) t.name else if (parsed.tracks.size > 1) fileName + " " + idx else fileName
+            Tracks.add(this, name, t.pts)
+        }
+        val w = parsed.waypoints
+        val summary = String.format(fa, "%d", parsed.tracks.size) + " مسیر"
+        if (w.isEmpty()) {
+            toast(summary + " وارد شد.")
+            showTracks()
+            return
+        }
+        dlg()
+            .setTitle("فایل خوانده شد")
+            .setMessage(summary + " و " + String.format(fa, "%d", w.size) + " نقطه در فایل بود. نقطه‌ها هم به «نقطه‌های ذخیره‌شده» اضافه شوند؟")
+            .setPositiveButton("بله، اضافه شود") { _, _ ->
+                for (x in w) {
+                    Waypoints.add(this, x.name.ifBlank { "نقطه" }, x.note, x.lat, x.lon, if (x.ele.isNaN()) 0.0 else x.ele)
+                }
+                refreshWaypointMarkers()
+                showTracks()
+            }
+            .setNegativeButton("فقط مسیرها") { _, _ -> showTracks() }
+            .show()
+    }
+
+    private fun showElevation(title: String, pts: List<TrackFile.Pt>) {
+        val st = ElevationStats.compute(pts)
+        if (!st.hasEle) {
+            toast("برای این مسیر ارتفاعی ثبت نشده است.")
+            return
+        }
+        val prof = ElevationStats.profile(pts)
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(16), dp(8), dp(16), 0)
+        val nl = Char(10).toString()
+        val info = tv(
+            "فاصله: " + distLabel(st.distanceM) + "  •  صعود: ↑" + String.format(fa, "%d", Math.round(st.ascent).toInt()) +
+                " م  •  نزول: ↓" + String.format(fa, "%d", Math.round(st.descent).toInt()) + " م" + nl +
+                "کمترین ارتفاع: " + String.format(fa, "%d", Math.round(st.min).toInt()) + " م  •  بیشترین: " +
+                String.format(fa, "%d", Math.round(st.max).toInt()) + " م",
+            12f, R.color.text_primary
+        )
+        val chart = ElevationView(this)
+        chart.dist = prof.first
+        chart.ele = prof.second
+        box.addView(info)
+        box.addView(chart)
+        dlg().setTitle(title).setView(box).setPositiveButton("بستن", null).show()
+    }
+
+    private fun showRideElevation(r: Ride) {
+        val pts = ElevationStats.parseLines(RouteLog.rideLines(this, r.startMs))
+        showElevation(r.shamsi, pts)
+    }
+
+    // ---- نقشه‌ی آفلاین
+    private var offlineActive = false
+
+    private class MbInfo(val minZoom: Double, val maxZoom: Double, val bounds: BoundingBox?)
+
+    private fun offlineMapFile(): java.io.File? {
+        val name = RideStore.settings(this).getString("offline_file", null) ?: return null
+        val f = java.io.File(java.io.File(filesDir, "maps"), name)
+        return if (f.exists()) f else null
+    }
+
+    /** اطلاعات MBTiles: بازه‌ی زوم و محدوده‌ی جغرافیایی (اگر در فایل باشد). */
+    private fun mbtilesInfo(f: java.io.File): MbInfo? {
+        if (!f.name.endsWith(".mbtiles", true)) return null
+        var db: android.database.sqlite.SQLiteDatabase? = null
+        return try {
+            db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                f.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+            )
+            val meta = HashMap<String, String>()
+            db.rawQuery("SELECT name, value FROM metadata", null).use { c ->
+                while (c.moveToNext()) meta[c.getString(0)] = c.getString(1) ?: ""
+            }
+            val minZ = meta["minzoom"]?.toDoubleOrNull() ?: 0.0
+            val maxZ = meta["maxzoom"]?.toDoubleOrNull() ?: 19.0
+            var bb: BoundingBox? = null
+            val b = meta["bounds"]?.split(",")?.mapNotNull { it.trim().toDoubleOrNull() }
+            if (b != null && b.size == 4) bb = BoundingBox(b[3], b[2], b[1], b[0])
+            MbInfo(minZ, maxZ, bb)
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { db?.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun applyMapSource() {
+        val s = RideStore.settings(this)
+        val f = offlineMapFile()
+        try {
+            if (s.getBoolean("offline_on", false) && f != null) {
+                val provider = org.osmdroid.tileprovider.modules.OfflineTileProvider(
+                    org.osmdroid.tileprovider.util.SimpleRegisterReceiver(this), arrayOf(f)
+                )
+                map.setTileProvider(provider)
+                var named = false
+                val archives = provider.archives
+                if (archives != null && archives.isNotEmpty()) {
+                    val names = archives[0].tileSources
+                    if (names != null && names.isNotEmpty()) {
+                        map.setTileSource(
+                            org.osmdroid.tileprovider.tilesource.FileBasedTileSource.getSource(names.iterator().next())
+                        )
+                        named = true
+                    }
+                }
+                if (!named) map.setTileSource(TileSourceFactory.DEFAULT_TILE_SOURCE)
+                map.setUseDataConnection(false)
+                offlineActive = true
+                val info = mbtilesInfo(f)
+                map.setMinZoomLevel(info?.minZoom)
+                map.setMaxZoomLevel(info?.maxZoom)
+            } else {
+                if (offlineActive) {
+                    map.setTileProvider(org.osmdroid.tileprovider.MapTileProviderBasic(applicationContext))
+                }
+                map.setTileSource(TileSourceFactory.MAPNIK)
+                map.setUseDataConnection(true)
+                map.setMinZoomLevel(null)
+                map.setMaxZoomLevel(null)
+                offlineActive = false
+            }
+        } catch (_: Exception) {
+            toast("باز کردن نقشه‌ی آفلاین ناموفق بود.")
+        }
+        map.invalidate()
+    }
+
+    private fun pickMapFile() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = "*/*"
+        try {
+            startActivityForResult(i, 522)
+        } catch (_: Exception) {
+            toast("برنامه‌ی انتخاب فایل پیدا نشد.")
+        }
+    }
+
+    private fun importMapFile(uri: Uri) {
+        val lower = displayName(uri).lowercase(Locale.US)
+        val ext = listOf("mbtiles", "sqlite", "zip", "gemf").firstOrNull { lower.endsWith("." + it) }
+        if (ext == null) {
+            toast("این فرمت پشتیبانی نمی‌شود. فایل باید MBTiles، SQLite، ZIP یا GEMF باشد.")
+            return
+        }
+        // اول به نقشه‌ی آنلاین برگرد تا فایل قبلی آزاد شود
+        RideStore.settings(this).edit().putBoolean("offline_on", false).apply()
+        applyMapSource()
+        val dir = java.io.File(filesDir, "maps")
+        dir.mkdirs()
+        val dest = java.io.File(dir, "offline_map." + ext)
+        val tmp = java.io.File(dir, "offline_map.tmp")
+        toast("در حال کپی نقشه… (برای فایل‌های بزرگ ممکن است چند دقیقه طول بکشد)")
+        Thread {
+            var ok = false
+            try {
+                contentResolver.openInputStream(uri)?.use { ins ->
+                    java.io.FileOutputStream(tmp).use { out -> ins.copyTo(out, 1 shl 16) }
+                }
+                dir.listFiles()?.forEach { if (it.isFile && it.name.startsWith("offline_map.") && it.name != "offline_map.tmp") it.delete() }
+                ok = tmp.renameTo(dest)
+            } catch (_: Exception) {
+                try { tmp.delete() } catch (_: Exception) {}
+            }
+            runOnUiThread {
+                if (!ok) {
+                    toast("کپی نقشه ناموفق بود (جای خالی کافی هست؟).")
+                } else {
+                    RideStore.settings(this).edit()
+                        .putString("offline_file", dest.name)
+                        .putBoolean("offline_on", true)
+                        .apply()
+                    applyMapSource()
+                    val info = mbtilesInfo(dest)
+                    val bb = info?.bounds
+                    if (info != null && bb != null) {
+                        map.controller.setCenter(GeoPoint(bb.centerLatitude, bb.centerLongitude))
+                        map.controller.setZoom(Math.max(info.minZoom, Math.min(15.0, info.maxZoom)))
+                    }
+                    toast("نقشه‌ی آفلاین فعال شد.")
+                    if (currentTab == 3) refreshSettings()
+                }
+            }
+        }.start()
+    }
+
+    private fun removeOfflineMap() {
+        RideStore.settings(this).edit().putBoolean("offline_on", false).remove("offline_file").apply()
+        applyMapSource()
+        java.io.File(filesDir, "maps").listFiles()?.forEach {
+            try { it.delete() } catch (_: Exception) {}
+        }
+        refreshSettings()
+    }
+
     private fun showPage(showMap: Boolean) {
         gaugePage.visibility = if (showMap) View.GONE else View.VISIBLE
         (modeButtons.firstOrNull()?.parent as? View)?.visibility = if (showMap) View.GONE else View.VISIBLE
@@ -1460,6 +1846,10 @@ class MainActivity : Activity() {
                 var sub = r.shamsi + (if (r.steps > 0) "  •  " + String.format(fa, "%d", r.steps) + " قدم" else "")
                 if (r.avgKmh > 0) sub += "  •  میانگین " + Units.speedText(this@MainActivity, r.avgKmh.toFloat())
                 if (r.maxKmh > 0) sub += " | حداکثر " + Units.speedText(this@MainActivity, r.maxKmh.toFloat())
+                if (r.ascent > 0 || r.descent > 0) {
+                    sub += "  •  ↑" + String.format(fa, "%d", Math.round(r.ascent).toInt()) +
+                        " ↓" + String.format(fa, "%d", Math.round(r.descent).toInt()) + " متر"
+                }
                 val t2 = v.findViewById<TextView>(android.R.id.text2)
                 t2.text = sub
                 t2.setTextColor(col(R.color.text_secondary))
@@ -1472,8 +1862,8 @@ class MainActivity : Activity() {
     private fun showRideMenu(r: Ride) {
         dlg()
             .setTitle(r.shamsi)
-            .setItems(arrayOf("نمایش مسیر روی نقشه", "اشتراک مسیر (GPX)", "حذف سفر")) { _, which ->
-                when (which) { 0 -> viewRide(r); 1 -> shareGpx(r); else -> confirmDelete(r) }
+            .setItems(arrayOf("نمایش مسیر روی نقشه", "اشتراک مسیر (GPX)", "نمودار ارتفاع", "حذف سفر")) { _, which ->
+                when (which) { 0 -> viewRide(r); 1 -> shareGpx(r); 2 -> showRideElevation(r); else -> confirmDelete(r) }
             }
             .show()
     }
@@ -1596,6 +1986,10 @@ class MainActivity : Activity() {
         addRecord("🕒 مجموع زمان سواری", RideStore.formatDuration(totalSec), null)
         val totalSteps = rides.sumOf { it.steps }
         if (totalSteps > 0) addRecord("👣 مجموع قدم‌ها", String.format(fa, "%d", totalSteps), null)
+        val topClimb = rides.maxByOrNull { it.ascent }
+        if (topClimb != null && topClimb.ascent > 0) {
+            addRecord("⛰ بیشترین صعود در یک سفر", String.format(fa, "%d", Math.round(topClimb.ascent).toInt()) + " متر", topClimb.shamsi)
+        }
     }
 
     // ------------------------------------------------------------------ تنظیمات
@@ -1721,6 +2115,39 @@ class MainActivity : Activity() {
         )
         bat.addView(segmented(listOf("باز کردن اطلاعات برنامه"), -1) { openBatterySettings() })
         settingsContainer.addView(bat)
+
+        // نقشه‌ی آفلاین
+        val om = card()
+        om.addView(tv("نقشه‌ی آفلاین", 14f, R.color.text_primary, true))
+        val mapFile = offlineMapFile()
+        om.addView(
+            tv(
+                if (mapFile != null) {
+                    "فایل فعلی: " + mapFile.name + " (" +
+                        android.text.format.Formatter.formatShortFileSize(this, mapFile.length()) + ")"
+                } else {
+                    "فایلی وارد نشده. فایل نقشه (MBTiles، SQLite، ZIP یا GEMF) را از حافظه‌ی گوشی انتخاب کن؛ بدون اینترنت هم نمایش داده می‌شود."
+                },
+                12f, R.color.text_secondary, false, 6
+            )
+        )
+        if (mapFile != null) {
+            om.addView(segmented(listOf("آنلاین", "آفلاین"), if (s.getBoolean("offline_on", false)) 1 else 0) { i ->
+                s.edit().putBoolean("offline_on", i == 1).apply()
+                applyMapSource()
+                refreshSettings()
+            })
+        }
+        om.addView(segmented(listOf("انتخاب فایل نقشه", "حذف فایل"), -1) { i ->
+            if (i == 0) pickMapFile() else removeOfflineMap()
+        })
+        om.addView(
+            tv(
+                "فایل نقشه را خودت تهیه می‌کنی. دانلود انبوه از سرورهای رسمی OpenStreetMap طبق سیاستشان مجاز نیست.",
+                11f, R.color.text_secondary, false, 8
+            )
+        )
+        settingsContainer.addView(om)
 
         // پشتیبان و بازیابی
         val bk = card()

@@ -7,13 +7,17 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-/** نوشتن نقطه‌های مسیر همراه با زمان، و ساخت فایل GPX. هر خط: عرض,طول,زمان‌میلی‌ثانیه */
+/** نوشتن نقطه‌های مسیر و ساخت GPX. هر خط: عرض,طول,زمان‌میلی‌ثانیه,ارتفاع(اختیاری) */
 object RouteLog {
     private fun current(c: Context) = File(c.filesDir, "current_route.csv")
     private fun saved(c: Context, startMs: Long) = File(File(c.filesDir, "routes"), "$startMs.csv")
 
-    fun append(c: Context, lat: Double, lon: Double, timeMs: Long) {
-        try { current(c).appendText("$lat,$lon,$timeMs\n") } catch (_: Exception) {}
+    fun append(c: Context, lat: Double, lon: Double, timeMs: Long, ele: Double = Double.NaN) {
+        try {
+            val line = if (ele.isNaN()) "$lat,$lon,$timeMs\n" else "$lat,$lon,$timeMs,$ele\n"
+            current(c).appendText(line)
+        } catch (_: Exception) {
+        }
     }
 
     fun rideLines(c: Context, startMs: Long): List<String> {
@@ -40,10 +44,14 @@ object RouteLog {
             if (p.size < 2) continue
             val la = p[0].toDoubleOrNull() ?: continue
             val lo = p[1].toDoubleOrNull() ?: continue
-            sb.append("      <trkpt lat=\"").append(la).append("\" lon=\"").append(lo).append("\"")
             val t = p.getOrNull(2)?.toLongOrNull()
-            if (t != null && t > 0L) {
-                sb.append("><time>").append(iso.format(Date(t))).append("</time></trkpt>\n")
+            val e = p.getOrNull(3)?.toDoubleOrNull()
+            sb.append("      <trkpt lat=\"").append(la).append("\" lon=\"").append(lo).append("\"")
+            if ((t != null && t > 0L) || e != null) {
+                sb.append(">")
+                if (e != null) sb.append("<ele>").append(e).append("</ele>")
+                if (t != null && t > 0L) sb.append("<time>").append(iso.format(Date(t))).append("</time>")
+                sb.append("</trkpt>\n")
             } else {
                 sb.append("/>\n")
             }
