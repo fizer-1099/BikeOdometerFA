@@ -424,7 +424,7 @@ class TrackingService : Service(), SensorEventListener {
         return NotificationCompat.Builder(this, CHANNEL)
             .setContentTitle("اف کیلومتر")
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_stat_gauge)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
