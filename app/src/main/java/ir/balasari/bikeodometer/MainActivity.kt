@@ -261,6 +261,7 @@ class MainActivity : Activity() {
         buildPointsUi()
         buildCompassButton()
         buildTracksUi()
+        arrangeMapToolbar()
 
         // نوار پایین (راست به چپ)
         tabNavs.add(addNav("🏠\nاصلی") { showTab(0) })
@@ -1621,6 +1622,38 @@ class MainActivity : Activity() {
             try { it.delete() } catch (_: Exception) {}
         }
         refreshSettings()
+    }
+
+    /** دکمه‌های نقشه را از ستون راست برمی‌دارد و در یک ردیف افقی (قابل اسکرول) زیر نوار جستجو می‌گذارد. */
+    private fun arrangeMapToolbar() {
+        val frame = mapPage as android.widget.FrameLayout
+        val wanted = listOf("دنبال کردن من", "📏 اندازه‌گیری", "📍 نقطه‌ها", "🧭 قطب‌نما", "🗺 مسیرها")
+        val picked = ArrayList<Button>()
+        for (i in 0 until frame.childCount) {
+            val v = frame.getChildAt(i)
+            if (v is Button && wanted.contains(v.text.toString())) picked.add(v)
+        }
+        if (picked.isEmpty()) return
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.setPadding(dp(12), 0, dp(4), 0)
+        for (b in picked) {
+            frame.removeView(b)
+            b.textSize = 12f
+            b.setPadding(dp(12), 0, dp(12), 0)
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38))
+            lp.setMargins(0, 0, dp(8), 0)
+            row.addView(b, lp)
+        }
+        val scroll = android.widget.HorizontalScrollView(this)
+        scroll.isHorizontalScrollBarEnabled = false
+        scroll.addView(row)
+        val slp = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        slp.gravity = Gravity.TOP
+        slp.topMargin = dp(68)
+        frame.addView(scroll, slp)
     }
 
     private fun showPage(showMap: Boolean) {
